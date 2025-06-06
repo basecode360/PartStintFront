@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+// src/pages/Login.jsx
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   TextField,
@@ -6,79 +7,97 @@ import {
   Typography,
   Paper,
   Avatar,
-} from "@mui/material";
-import { useNavigate } from "react-router-dom";
-import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import Visibility from "@mui/icons-material/Visibility";
-import VisibilityOff from "@mui/icons-material/VisibilityOff";
-import apiService from "../api/apiService"; 
-import { userStore } from "../store/authStore";
-import getValidAuthToken from "../utils/authToken"; // Function to validate token
-// const allowedUsers = [
-//   { email: "teampartstunt@gmail.com", password: "Dodge@#124578~" },
-// ];
+} from '@mui/material';
+import { useNavigate } from 'react-router-dom';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
+
+import apiService from '../api/apiService';
+import getValidAuthToken from '../utils/getValidAuthToken';
+import { userStore } from '../store/authStore';
 
 export default function Login({ handleLogin }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
-  const saveUser = userStore(store => store.saveUser)
-  const user = userStore(store => store.user)
- useEffect(() => {
-  if (user) {
-    navigate("/home");
-  }
- },[])
 
-const handleLoginClick = async () => {
-  try {
-    console.log("Login attempt with email:", email, "and password:", password);
-    
-    // Step 1: Attempt login
-    const response = await apiService.auth.login({ email, password });
-    console.log("API response:", response);
+  const saveUser = userStore((store) => store.saveUser);
+  const user = userStore((store) => store.user);
 
-    if (response.success) {
-      // Step 2: Save credentials if needed
-      saveUser({ email, password });
-
-      // Step 4: Proceed to next screen
-      const token = await getValidAuthToken();
-      handleLogin(); // from App.js
-      navigate("/home");
-    } else {
-      setError("Invalid email or password");
+  useEffect(() => {
+    // If already logged in, redirect to /home
+    if (user) {
+      navigate('/home');
     }
-  } catch (error) {
-    console.error("Error during login:", error);
-    setError("Something went wrong during login.");
-  }
-};
+  }, [user, navigate]);
 
+  const handleLoginClick = async () => {
+    try {
+      setError('');
+      console.log('Login attempt with:', email, password);
+
+      // 1) Call backend: POST /auth/login
+      const response = await apiService.auth.login({ email, password });
+      console.log('Login response:', response);
+
+      if (response.success) {
+        const { user: loggedUser, token: appJwt } = response.data;
+
+        // 2) Save our own JWT + userId to localStorage and Zustand
+        localStorage.setItem('app_jwt', appJwt);
+        localStorage.setItem('user_id', loggedUser.id);
+
+        saveUser({
+          id: loggedUser.id,
+          email: loggedUser.email,
+          token: appJwt,
+        });
+
+        // 3) Fetch a valid eBay user token immediately
+        try {
+          const ebayToken = await getValidAuthToken();
+          console.log('Obtained eBay token:', ebayToken);
+        } catch (ebayErr) {
+          console.warn('Could not fetch eBay token immediately:', ebayErr);
+          // You may still proceed or force eBay link depending on UX
+        }
+
+        // 4) Notify parent and navigate
+        handleLogin();
+        navigate('/home');
+      } else {
+        setError(response.error || 'Invalid email or password');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('Something went wrong during login.');
+    }
+  };
 
   const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
+    setShowPassword((prev) => !prev);
   };
 
   return (
     <Box
       sx={{
-        minHeight: "100vh",
-        background: "linear-gradient(to right, #2E3B4E, #607D8B)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+        minHeight: '100vh',
+        background: 'linear-gradient(to right, #2E3B4E, #607D8B)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         px: 2,
       }}
     >
       <Paper
         elevation={5}
-        sx={{ p: 5, maxWidth: 400, width: "100%", borderRadius: 3 }}
+        sx={{ p: 5, maxWidth: 400, width: '100%', borderRadius: 3 }}
       >
         <Box display="flex" flexDirection="column" alignItems="center" mb={3}>
-          <Avatar sx={{ bgcolor: "#2E3B4E", mb: 1 }}>
+          <Avatar sx={{ bgcolor: '#2E3B4E', mb: 1 }}>
             <LockOutlinedIcon />
           </Avatar>
           <Typography variant="h5" fontWeight={600}>
@@ -99,11 +118,11 @@ const handleLoginClick = async () => {
           onChange={(e) => setEmail(e.target.value)}
         />
 
-        <Box sx={{ position: "relative" }}>
+        <Box sx={{ position: 'relative' }}>
           <TextField
             fullWidth
             label="Password"
-            type={showPassword ? "text" : "password"}
+            type={showPassword ? 'text' : 'password'}
             variant="outlined"
             margin="normal"
             value={password}
@@ -112,11 +131,11 @@ const handleLoginClick = async () => {
               endAdornment: (
                 <Box
                   sx={{
-                    position: "absolute",
-                    right: "10px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    cursor: "pointer",
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    cursor: 'pointer',
                   }}
                   onClick={togglePasswordVisibility}
                 >
@@ -139,12 +158,10 @@ const handleLoginClick = async () => {
           onClick={handleLoginClick}
           sx={{
             mt: 3,
-            backgroundColor: "#2E3B4E",
-            "&:hover": {
-              backgroundColor: "#1f2c3a",
-            },
-            textTransform: "none",
-            fontWeight: "bold",
+            backgroundColor: '#2E3B4E',
+            '&:hover': { backgroundColor: '#1f2c3a' },
+            textTransform: 'none',
+            fontWeight: 'bold',
             py: 1.3,
           }}
         >

@@ -1,34 +1,39 @@
 // src/utils/getValidAuthToken.js
-import apiService from "../api/apiService";
-import { useProductStore } from "../store/productStore";
-import { usetokenStore } from "../store/tokenStore";
+import apiService from '../api/apiService';
 
-const getValidAuthToken = async () => {
-  const { accessToken, modifyAuthToken } = usetokenStore.getState();
-
-  const session = sessionStorage.getItem("product-store-access-token");
-  if (session) {
-    const { expiry, value } = JSON.parse(session);
-    console.log(`expiry => ${Date.now()}`);
-    if (Date.now() < expiry && value) {
-      return accessToken; // ✅ Token is still valid
-    }
+export default async function getValidAuthToken() {
+  // 1) Grab our “app user” ID from localStorage (populated on login)
+  const userId = localStorage.getItem('user_id');
+  if (!userId) {
+    throw new Error(
+      'No user_id found in localStorage. Please log in first so we know which eBay account to refresh.'
+    );
   }
 
-  // ❌ Expired or missing — call API and wait
   try {
-    const response = await apiService.auth.getAuthToken();
-    if (response.success) {
-      console.log("✅ Fetched new auth token:", response.auth_token);
-      modifyAuthToken(response.auth_token);
-      return response.auth_token;
-    } else {
-      throw new Error("Failed to fetch new auth token");
+    // 2) Call our backend to get a valid eBay user token (refresh if needed)
+    //    We expect our backend endpoint /auth/token to return:
+    //      { success: true, auth_token: "<ebay_access_token>", expires_at: "...", expires_in_seconds: N, token_type:"user_token" }
+    const resp = await apiService.auth.getEbayUserToken(userId);
+
+    if (!resp.success) {
+      throw new Error(
+        resp.error || resp.message || 'Failed to fetch eBay user token'
+      );
     }
+
+    const ebayToken = resp.auth_token;
+    if (!ebayToken) {
+      throw new Error('Backend did not return an eBay user token');
+    }
+
+    // 3) Store in localStorage so that API calls can pick it up later
+    localStorage.setItem('ebay_user_token', ebayToken);
+
+    // 4) Return the fresh eBay token
+    return ebayToken;
   } catch (err) {
-    console.error("❌ Token fetch error:", err);
+    console.error('Error in getValidAuthToken:', err);
     throw err;
   }
-};
-
-export default getValidAuthToken;
+}

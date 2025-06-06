@@ -1,598 +1,411 @@
 // src/api/apiService.js
-import axios from "axios";
+import axios from 'axios';
 
-const backend_url = import.meta.env.VITE_BACKEND_URL;
-const apiKey = import.meta.env.VITE_X_API_KEY;
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL; // e.g. http://localhost:5000
+const API_KEY = import.meta.env.VITE_X_API_KEY; // (for sync routes)
 
-const API_BASE_URL = `${backend_url}/api/ebay`;
-const syncURL = `${backend_url}/api/sync`;
-const authURL = `${backend_url}/api/auth`;
-
-console.log(`Sync Url: ${syncURL}`);
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-});
-
+/** ——————————— AUTH CLIENT ——————————— **/
 const authClient = axios.create({
-  baseURL: authURL,
+  baseURL: `${BACKEND_URL}/auth`,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
+/** ——————————— EBAY CLIENT ——————————— **/
+const apiClient = axios.create({
+  baseURL: `${BACKEND_URL}/api/ebay`,
+});
+
+const pricingClient = axios.create({
+  baseURL: `${BACKEND_URL}/api/pricing-strategies`,
+});
+
+const competitorClient = axios.create({
+  baseURL: `${BACKEND_URL}/api/competitor-rules`,
+});
+
+/** ————————— UTILITY: Attach eBay user‐token ————————— **/
+function getRawEbayTokenFromStorage() {
+  return localStorage.getItem('ebay_user_token');
+}
+
+function parseEbayTokenValue() {
+  const raw = getRawEbayTokenFromStorage();
+  if (!raw) return '';
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed.value || '';
+  } catch {
+    return '';
+  }
+}
+
+// Before each request to /api/ebay or /api/pricing-strategies or /api/competitor-rules:
+apiClient.interceptors.request.use((config) => {
+  const token = parseEbayTokenValue();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+pricingClient.interceptors.request.use((config) => {
+  const token = parseEbayTokenValue();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+competitorClient.interceptors.request.use((config) => {
+  const token = parseEbayTokenValue();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+/** ————————— INVENTORY & SYNC & COMPETITOR → EBAY ROUTES ————————— **/
 const inventory = {
   getActiveListings: async () => {
     try {
-      const response = await apiClient.get("/active-listings");
-      console.log("API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("API error:", error);
-      return { success: false, error: error.message };
+      const resp = await apiClient.get('/active-listings');
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ getActiveListings:', err);
+      return { success: false, error: err.message };
     }
   },
   editPrice: async (requestData) => {
     try {
-      const response = await apiClient.post(
-        "/edit-variation-price",
-        requestData
-      );
-      console.log("API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("API error:", error);
-      return { success: false, error: error.message };
+      const resp = await apiClient.post('/edit-variation-price', requestData);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ editPrice:', err);
+      return { success: false, error: err.message };
     }
   },
-  assignPricingStrategy: async (requestData) => {
-    console.log(`request data  => ${requestData.targetPrice}
-      `);
+  triggerAutoSync: async (params = {}) => {
     try {
-      const response = await apiClient.post("/pricing-strategy", requestData);
-      console.log("API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("API error:", error);
-      return { success: false, error: error.message };
-    }
-  },
-  triggerAutoSync: async (requestData) => {
-    console.log(`request data  => ${requestData}
-      `);
-    try {
-      const response = await axios.get(`${syncURL}/scheduled`, {
+      const resp = await axios.get(`${BACKEND_URL}/api/sync/scheduled`, {
         headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey, // send the key we got from client
+          'Content-Type': 'application/json',
+          'x-api-key': API_KEY || '',
         },
-        params: requestData, // query string
+        params,
       });
-      console.log("API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("API error:", error);
-      return { success: false, error: error.message };
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ triggerAutoSync:', err);
+      return { success: false, error: err.message };
     }
   },
   getCompetitorPrice: async (itemId) => {
     try {
-      const response = await axios.get(
-        `${backend_url}/api/pricing-strategies/products/${itemId}`
+      const resp = await apiClient.get(
+        `/pricing-strategies/products/${itemId}`
       );
-      const data = response.data?.competitorPrices || {};
-      const productInfo = data.allData;
-      console.log(`Competitor price data for ${itemId}:`, productInfo);
-      const prices = Array.isArray(data.allPrices) ? data.allPrices : [];
-      return {
-        price:
-          prices.length > 0
-            ? `USD${parseFloat(Math.min(...prices)).toFixed(2)}`
-            : "USD0.00",
-        count: prices.length,
-        allPrices: prices,
-        productInfo,
-      };
-    } catch (error) {
-      console.error(`Error fetching competitor price for ${itemId}:`, error);
-      return {
-        price: "USD0.00",
-        count: 0,
+      const data = resp.data?.competitorPrices || {
+        allData: [],
         allPrices: [],
       };
+      const allPrices = Array.isArray(data.allPrices) ? data.allPrices : [];
+      return {
+        price:
+          allPrices.length > 0
+            ? `USD${parseFloat(Math.min(...allPrices)).toFixed(2)}`
+            : 'USD0.00',
+        count: allPrices.length,
+        allPrices,
+        productInfo: data.allData,
+      };
+    } catch (err) {
+      console.error(`Error @ getCompetitorPrice(${itemId}):`, err);
+      return { price: 'USD0.00', count: 0, allPrices: [], productInfo: [] };
     }
   },
 };
 
+/** ————————————— AUTH (LOGIN / REGISTER / EXCHANGE CODE / GET TOKEN) ————————————— **/
 const auth = {
-  getAuthToken: async () => {
+  register: async (credentials) => {
     try {
-      const response = await axios.get(`${backend_url}/auth/automated-login`);
-      console.log("API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("API error:", error);
-      return { success: false, error: error.message };
+      const resp = await authClient.post('/register', credentials);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ auth.register:', err);
+      return { success: false, error: err.message };
     }
   },
   login: async (credentials) => {
     try {
-      const response = await authClient.post("/login", credentials);
-      console.log("API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("API error:", error);
-      return { success: false, error: error.message };
+      const resp = await authClient.post('/login', credentials);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ auth.login:', err);
+      return { success: false, error: err.message };
     }
   },
-  logout: async () => {
+  exchangeCode: async ({ code, userId }) => {
     try {
-      const response = await authClient.post("/logout");
-      console.log("API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("API error:", error);
-      return { success: false, error: error.message };
+      const resp = await authClient.post('/exchange-code', { code, userId });
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ auth.exchangeCode:', err);
+      return { success: false, error: err.message };
     }
   },
-  register: async (requestData) => {
+  getEbayUserToken: async (userId) => {
     try {
-      const response = await authClient.post("/register", requestData);
-      console.log("API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("API error:", error);
-      return { success: false, error: error.message };
+      const resp = await authClient.get('/token', { params: { userId } });
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ auth.getEbayUserToken:', err);
+      return { success: false, error: err.message };
+    }
+  },
+  refreshEbayUserToken: async (userId) => {
+    try {
+      const resp = await authClient.get('/refresh', { params: { userId } });
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ auth.refreshEbayUserToken:', err);
+      return { success: false, error: err.message };
     }
   },
 };
 
-// ===============================
-// PRICING STRATEGIES API
-// ===============================
+/** ————————————— PRICING STRATEGIES ————————————— **/
 const pricingStrategies = {
-  // Create strategy on specific product
   createStrategyOnProduct: async (itemId, strategyData) => {
     try {
-      const response = await axios.post(
-        `${backend_url}/api/pricing-strategies/products/${itemId}`,
+      const resp = await pricingClient.post(
+        `/products/${itemId}`,
         strategyData
       );
-      console.log("Create strategy API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Create strategy API error:", error);
-      throw new Error(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to create pricing strategy"
-      );
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ createStrategyOnProduct:', err);
+      throw err;
     }
   },
-
-  // Create strategy and assign to all active listings
   createStrategyForAllActive: async (strategyData) => {
     try {
-      const response = await axios.post(
-        `${backend_url}/api/pricing-strategies/assign-to-all-active`,
+      const resp = await pricingClient.post(
+        `/assign-to-all-active`,
         strategyData
       );
-      console.log("Create strategy for all active API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Create strategy for all active API error:", error);
-      throw new Error(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to assign pricing strategy to active listings"
-      );
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ createStrategyForAllActive:', err);
+      throw err;
     }
   },
-
-  // Get strategy from specific product
   getStrategyFromProduct: async (itemId) => {
     try {
-      const response = await axios.get(
-        `${backend_url}/api/pricing-strategies/products/${itemId}`
-      );
-      console.log("Get strategy API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Get strategy API error:", error);
-      return {
-        success: false,
-        hasPricingStrategy: false,
-        pricingStrategy: null,
-        error: error.message,
-      };
+      const resp = await pricingClient.get(`/products/${itemId}`);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ getStrategyFromProduct:', err);
+      return { success: false, error: err.message };
     }
   },
-
-  // Get all active listings with strategies
   getAllActiveWithStrategies: async () => {
     try {
-      const response = await axios.get(
-        `${backend_url}/api/pricing-strategies/active-listings`
-      );
-      console.log("Get all active with strategies API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Get all active with strategies API error:", error);
-      return { success: false, listings: [], error: error.message };
+      const resp = await pricingClient.get(`/active-listings`);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ getAllActiveWithStrategies:', err);
+      return { success: false, error: err.message };
     }
   },
-
-  // Update strategy on specific product
   updateStrategyOnProduct: async (itemId, strategyData) => {
     try {
-      const response = await axios.put(
-        `${backend_url}/pricing-strategies/products/${itemId}`,
-        strategyData
-      );
-      console.log("Update strategy API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Update strategy API error:", error);
-      throw new Error(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to update pricing strategy"
-      );
+      const resp = await pricingClient.put(`/products/${itemId}`, strategyData);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ updateStrategyOnProduct:', err);
+      throw err;
     }
   },
-
-  // Delete strategy from specific product
   deleteStrategyFromProduct: async (itemId) => {
     try {
-      const response = await axios.delete(
-        `${backend_url}/pricing-strategies/products/${itemId}`
-      );
-      console.log("Delete strategy API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Delete strategy API error:", error);
-      throw new Error(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to delete pricing strategy"
-      );
+      const resp = await pricingClient.delete(`/products/${itemId}`);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ deleteStrategyFromProduct:', err);
+      throw err;
     }
   },
-
-  // Delete strategies from all active listings
   deleteStrategiesFromAllActive: async () => {
     try {
-      const response = await axios.delete(
-        `${backend_url}/pricing-strategies/delete-from-all-active`
-      );
-      console.log("Delete strategies from all active API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Delete strategies from all active API error:", error);
-      throw new Error(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to delete pricing strategies from active listings"
-      );
+      const resp = await pricingClient.delete(`/delete-from-all-active`);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ deleteStrategiesFromAllActive:', err);
+      throw err;
     }
   },
-
-  // Apply strategy to update product price
   applyStrategyToProduct: async (itemId, applyData) => {
     try {
-      const response = await axios.post(
-        `${backend_url}/pricing-strategies/products/${itemId}/apply`,
-        applyData
-      );
-      console.log("Apply strategy API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Apply strategy API error:", error);
-      throw new Error(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to apply pricing strategy"
-      );
+      const resp = await pricingClient.post(`/${itemId}/apply`, applyData);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ applyStrategyToProduct:', err);
+      throw err;
     }
   },
-
-  // Apply strategy to multiple products (bulk)
   applyStrategyBulk: async (applyData) => {
     try {
-      const response = await axios.post(
-        `${backend_url}/pricing-strategies/apply-bulk`,
-        applyData
-      );
-      console.log("Apply strategy bulk API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Apply strategy bulk API error:", error);
-      throw new Error(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to apply pricing strategy in bulk"
-      );
+      const resp = await pricingClient.post(`/apply-bulk`, applyData);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ applyStrategyBulk:', err);
+      throw err;
     }
   },
-
-  // Get all unique strategies for dropdown
   getAllUniqueStrategies: async () => {
     try {
-      const response = await axios.get(
-        `${backend_url}/api/ebay/pricing-strategies?active=true`
-      );
-      console.log("Get unique strategies API response:", response);
-
-      if (response.data.success && response.data.listings) {
-        // Extract unique strategies
-        const uniqueStrategies = [];
-        const seen = new Set();
-
-        response.data.listings.forEach((listing) => {
-          if (listing.hasPricingStrategy && listing.pricingStrategy) {
-            const strategyKey = `${listing.pricingStrategy.strategyName}_${listing.pricingStrategy.repricingRule}`;
-            if (!seen.has(strategyKey)) {
-              seen.add(strategyKey);
-              uniqueStrategies.push({
-                ...listing.pricingStrategy,
-                displayName: `${listing.pricingStrategy.strategyName} (${listing.pricingStrategy.repricingRule})`,
-              });
-            }
-          }
-        });
-
-        return { success: true, strategies: uniqueStrategies };
-      }
-
-      return { success: false, strategies: [] };
-    } catch (error) {
-      console.error("Get unique strategies API error:", error);
-      return { success: false, strategies: [], error: error.message };
+      const resp = await pricingClient.get(`?active=true`);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ getAllUniqueStrategies:', err);
+      return { success: false, error: err.message };
     }
   },
 };
 
-// ===============================
-// COMPETITOR RULES API
-// ===============================
+/** ————————————— COMPETITOR RULES ————————————— **/
 const competitorRules = {
-  // Create rule on specific product
   createRuleOnProduct: async (itemId, ruleData) => {
     try {
-      console.log(`Creating competitor rule for itemId:${ruleData}`);
-      const response = await axios.post(
-        `${backend_url}/api/competitor-rules/products/${itemId}`,
-        ruleData
-      );
-      console.log("Create competitor rule API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Create competitor rule API error:", error);
-      throw new Error(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to create competitor rule"
-      );
+      const resp = await competitorClient.post(`/products/${itemId}`, ruleData);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ createRuleOnProduct:', err);
+      throw err;
     }
   },
-
-  // Create rule and assign to all active listings
   createRuleForAllActive: async (ruleData) => {
     try {
-      const response = await axios.post(
-        `${backend_url}/api/competitor-rules/assign-to-all-active`,
+      const resp = await competitorClient.post(
+        `/assign-to-all-active`,
         ruleData
       );
-      console.log("Create rule for all active API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Create rule for all active API error:", error);
-      throw new Error(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to assign competitor rule to active listings"
-      );
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ createRuleForAllActive:', err);
+      throw err;
     }
   },
-
-  // Get rule from specific product
   getRuleFromProduct: async (itemId) => {
     try {
-      console.log(`Fetching competitor rule for itemId: ${itemId}`);
-      const response = await axios.get(
-        `${backend_url}/api/competitor-rules/products/${itemId}`
-      );
-      console.log("Get competitor rule API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Get competitor rule API error:", error);
-      return {
-        success: false,
-        hasCompetitorRule: false,
-        competitorRule: null,
-        error: error.message,
-      };
+      const resp = await competitorClient.get(`/products/${itemId}`);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ getRuleFromProduct:', err);
+      return { success: false, error: err.message };
     }
   },
-
-  // Get all active listings with rules
   getAllActiveWithRules: async () => {
     try {
-      const response = await axios.get(
-        `${backend_url}/api/competitor-rules/active-listings`
-      );
-      console.log("Get all active with rules API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Get all active with rules API error:", error);
-      return { success: false, listings: [], error: error.message };
+      const resp = await competitorClient.get(`/active-listings`);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ getAllActiveWithRules:', err);
+      return { success: false, error: err.message };
     }
   },
-
-  // Update rule on specific product
   updateRuleOnProduct: async (itemId, ruleData) => {
     try {
-      const response = await axios.put(
-        `${backend_url}/competitor-rules/products/${itemId}`,
-        ruleData
-      );
-      console.log("Update competitor rule API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Update competitor rule API error:", error);
-      throw new Error(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to update competitor rule"
-      );
+      const resp = await competitorClient.put(`/products/${itemId}`, ruleData);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ updateRuleOnProduct:', err);
+      throw err;
     }
   },
-
-  // Delete rule from specific product
   deleteRuleFromProduct: async (itemId) => {
     try {
-      const response = await axios.delete(
-        `${backend_url}/competitor-rules/products/${itemId}`
-      );
-      console.log("Delete competitor rule API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Delete competitor rule API error:", error);
-      throw new Error(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to delete competitor rule"
-      );
+      const resp = await competitorClient.delete(`/products/${itemId}`);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ deleteRuleFromProduct:', err);
+      throw err;
     }
   },
-
-  // Delete rules from all active listings
   deleteRulesFromAllActive: async () => {
     try {
-      const response = await axios.delete(
-        `${backend_url}/competitor-rules/delete-from-all-active`
-      );
-      console.log("Delete rules from all active API response:", response);
-      return response.data;
-    } catch (error) {
-      console.error("Delete rules from all active API error:", error);
-      throw new Error(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to delete competitor rules from active listings"
-      );
+      const resp = await competitorClient.delete(`/delete-from-all-active`);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ deleteRulesFromAllActive:', err);
+      throw err;
     }
   },
-
-  // Get all unique rules for dropdown
   getAllUniqueRules: async () => {
     try {
-      const response = await axios.get(
-        `${backend_url}/competitor-rules/active-listings`
-      );
-      console.log("Get unique rules API response:", response);
-
-      if (response.data.success && response.data.listings) {
-        // Extract unique rules
-        const uniqueRules = [];
-        const seen = new Set();
-
-        response.data.listings.forEach((listing) => {
-          if (listing.hasCompetitorRule && listing.competitorRule) {
-            const ruleKey = listing.competitorRule.ruleName;
-            if (!seen.has(ruleKey)) {
-              seen.add(ruleKey);
-              uniqueRules.push({
-                ...listing.competitorRule,
-                displayName: listing.competitorRule.ruleName,
-              });
-            }
-          }
-        });
-
-        return { success: true, rules: uniqueRules };
-      }
-
-      return { success: false, rules: [] };
-    } catch (error) {
-      console.error("Get unique rules API error:", error);
-      return { success: false, rules: [], error: error.message };
+      const resp = await competitorClient.get(`/active-listings`);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ getAllUniqueRules:', err);
+      return { success: false, error: err.message };
     }
   },
 };
 
-// ===============================
-// COMBINED API FUNCTIONS
-// ===============================
+/** —————————————— COMBINED HELPERS —————————————— **/
 const combined = {
-  // Get both strategies and rules for a product
   getProductRulesAndStrategies: async (itemId) => {
     try {
-      const [strategyResponse, ruleResponse] = await Promise.allSettled([
+      const [stratRes, ruleRes] = await Promise.allSettled([
         pricingStrategies.getStrategyFromProduct(itemId),
         competitorRules.getRuleFromProduct(itemId),
       ]);
-
       return {
         success: true,
-        itemId,
-        strategy:
-          strategyResponse.status === "fulfilled"
-            ? strategyResponse.value
-            : null,
-        rule: ruleResponse.status === "fulfilled" ? ruleResponse.value : null,
+        strategy: stratRes.status === 'fulfilled' ? stratRes.value : null,
+        rule: ruleRes.status === 'fulfilled' ? ruleRes.value : null,
         errors: {
           strategy:
-            strategyResponse.status === "rejected"
-              ? strategyResponse.reason.message
-              : null,
-          rule:
-            ruleResponse.status === "rejected"
-              ? ruleResponse.reason.message
-              : null,
+            stratRes.status === 'rejected' ? stratRes.reason.message : null,
+          rule: ruleRes.status === 'rejected' ? ruleRes.reason.message : null,
         },
       };
-    } catch (error) {
-      console.error("Get product rules and strategies error:", error);
-      return { success: false, error: error.message };
+    } catch (err) {
+      console.error('Error @ combined.getProductRulesAndStrategies:', err);
+      return { success: false, error: err.message };
     }
   },
-
-  // Get all unique strategies and rules for dropdowns
   getAllOptionsForDropdowns: async () => {
     try {
-      const [strategiesResponse, rulesResponse] = await Promise.allSettled([
+      const [strategiesRes, rulesRes] = await Promise.allSettled([
         pricingStrategies.getAllUniqueStrategies(),
         competitorRules.getAllUniqueRules(),
       ]);
-
       return {
         success: true,
         strategies:
-          strategiesResponse.status === "fulfilled"
-            ? strategiesResponse.value.strategies
+          strategiesRes.status === 'fulfilled'
+            ? strategiesRes.value.strategies || []
             : [],
         rules:
-          rulesResponse.status === "fulfilled" ? rulesResponse.value.rules : [],
+          rulesRes.status === 'fulfilled' ? rulesRes.value.rules || [] : [],
         errors: {
           strategies:
-            strategiesResponse.status === "rejected"
-              ? strategiesResponse.reason.message
+            strategiesRes.status === 'rejected'
+              ? strategiesRes.reason.message
               : null,
           rules:
-            rulesResponse.status === "rejected"
-              ? rulesResponse.reason.message
-              : null,
+            rulesRes.status === 'rejected' ? rulesRes.reason.message : null,
         },
       };
-    } catch (error) {
-      console.error("Get all options for dropdowns error:", error);
-      return {
-        success: false,
-        strategies: [],
-        rules: [],
-        error: error.message,
-      };
+    } catch (err) {
+      console.error('Error @ combined.getAllOptionsForDropdowns:', err);
+      return { success: false, error: err.message, strategies: [], rules: [] };
     }
   },
-
-  // Create both rule and strategy together
   createRuleAndStrategy: async (
     itemId,
     ruleData,
@@ -601,7 +414,6 @@ const combined = {
   ) => {
     try {
       const promises = [];
-
       if (ruleData) {
         if (assignToAll) {
           promises.push(competitorRules.createRuleForAllActive(ruleData));
@@ -609,7 +421,6 @@ const combined = {
           promises.push(competitorRules.createRuleOnProduct(itemId, ruleData));
         }
       }
-
       if (strategyData) {
         if (assignToAll) {
           promises.push(
@@ -621,21 +432,16 @@ const combined = {
           );
         }
       }
-
       const results = await Promise.allSettled(promises);
-
       return {
         success: true,
-        message: "Rules and strategies created successfully",
-        results: results.map((result) =>
-          result.status === "fulfilled"
-            ? result.value
-            : { error: result.reason.message }
+        results: results.map((r) =>
+          r.status === 'fulfilled' ? r.value : { error: r.reason.message }
         ),
       };
-    } catch (error) {
-      console.error("Create rule and strategy error:", error);
-      throw new Error(error.message || "Failed to create rules and strategies");
+    } catch (err) {
+      console.error('Error @ combined.createRuleAndStrategy:', err);
+      throw err;
     }
   },
 };
