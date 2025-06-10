@@ -97,7 +97,7 @@ export default function Home({ handleLogout }) {
       const top = window.screenY + (window.innerHeight - height) / 2;
 
       const popup = window.open(
-        `${backendBase}/auth/login?userId=${user.id}`,
+        `${backendBase}/auth/ebay-login?userId=${user.id}`,
         'EbayOAuthPopup',
         `width=${width},height=${height},top=${top},left=${left}`
       );
