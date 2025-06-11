@@ -7,13 +7,11 @@ export default function PopupCallback() {
   useEffect(() => {
     let code, state, expiresIn;
 
-    // First try to get from query string
     const params = new URLSearchParams(window.location.search);
     code = params.get('code');
     state = params.get('state');
     expiresIn = params.get('expires_in');
 
-    // Fallback: try to extract from hash fragment
     if (!code && window.location.hash) {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       code = hashParams.get('code');
@@ -31,15 +29,24 @@ export default function PopupCallback() {
       return;
     }
 
-    // Send to parent
-    window.opener.postMessage(
-      { code, state, expires_in: expiresIn },
-      window.location.origin
-    );
+    try {
+      if (window.opener && typeof window.opener.postMessage === 'function') {
+        console.log('[PopupCallback] Sending postMessage to opener');
+        window.opener.postMessage(
+          { code, state, expires_in: expiresIn },
+          window.location.origin
+        );
+      } else {
+        console.error('[PopupCallback] window.opener is null or invalid');
+      }
+    } catch (err) {
+      console.error('[PopupCallback] Error posting message to opener:', err);
+    }
 
-    // Close popup
+    // Always try to close
     window.close();
   }, []);
+  
   
 
   return (
