@@ -65,39 +65,37 @@ export default function Home({ handleLogout }) {
   }, [user]);
 
   // 1) On mount (and whenever the "user" changes), try to fetch/refresh the eBay token.
-  //    If none is available, show “Connect to eBay” button.
+  //    If none is available, show "Connect to eBay" button.
   useEffect(() => {
     async function checkToken() {
-      if (!user || !user.id) {
-        // No logged‐in user → bail out.
-        return;
+      if (!user || !user.id) return;
+
+      // 1. Try localStorage first
+      const localToken = localStorage.getItem('ebay_user_token');
+      if (localToken) {
+        setEbayToken(localToken); // use it
+        setNeedsConnection(false); // hide "connect" button
       }
+
+      // 2. Still validate via backend in case token is expired
       try {
-        // Pass user.id into getValidAuthToken so it can do GET /auth/token?userId=<…>
-        const localToken = localStorage.getItem('ebay_user_token');
-
-        if (localToken) {
-          // Optimistically use local token first
-          setEbayToken(localToken);
+        const token = await getValidAuthToken(user.id);
+        if (token) {
+          localStorage.setItem('ebay_user_token', token);
+          setEbayToken(token);
           setNeedsConnection(false);
-        }
-
-        // Validate with backend anyway (to refresh if needed)
-        const freshToken = await getValidAuthToken(user.id);
-
-        if (freshToken) {
-          localStorage.setItem('ebay_user_token', freshToken);
-          setEbayToken(freshToken);
-          setNeedsConnection(false);
-        } else {
+        } else if (!localToken) {
+          // If no local token either
           setNeedsConnection(true);
         }
-        // We have a valid (or freshly‐refreshed) eBay token:
       } catch (err) {
+        if (!localToken) {
+          setNeedsConnection(true);
+        }
         console.warn('⚠️ Unable to fetch/refresh eBay token:', err);
-        setNeedsConnection(true);
       }
     }
+
     checkToken();
   }, [user]);
 
