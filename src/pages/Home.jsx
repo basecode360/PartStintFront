@@ -124,9 +124,28 @@ export default function Home({ handleLogout }) {
       setLoadingListings(true);
       setListingsError(null);
       try {
-        // Our interceptor attaches “Authorization: Bearer <ebayToken>”
+        // Our interceptor attaches "Authorization: Bearer <ebayToken>"
         const data = await apiService.inventory.getActiveListings();
         if (!data.success) {
+          // Check if token expired
+          if (data.errors?.[0]?.errorId === 932) {
+            console.warn('eBay token expired. Refreshing…');
+            const refreshed = await apiService.auth.refreshEbayUserToken(
+              user.id
+            );
+            if (refreshed?.success && refreshed.data?.access_token) {
+              const expires = refreshed.data.expires_in || 7200;
+              localStorage.setItem(
+                'ebay_user_token',
+                JSON.stringify({
+                  value: refreshed.data.access_token,
+                  expiry: Date.now() + expires * 1000,
+                })
+              );
+              setEbayToken(refreshed.data.access_token);
+              return; // re-trigger fetchListings on next effect run
+            }
+          }
           setListingsError(data.error || 'Failed to load listings.');
         }
         // TODO: store “data” (listings) into local state or a global store.
