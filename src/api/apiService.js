@@ -31,14 +31,7 @@ function getRawEbayTokenFromStorage() {
 }
 
 function parseEbayTokenValue() {
-  const raw = getRawEbayTokenFromStorage();
-  if (!raw) return '';
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed.value || '';
-  } catch {
-    return '';
-  }
+  return localStorage.getItem('ebay_user_token') || '';
 }
 
 // Before each request to /api/ebay or /api/pricing-strategies or /api/competitor-rules:
