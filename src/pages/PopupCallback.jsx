@@ -5,34 +5,42 @@ export default function PopupCallback() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    let code, state, expiresIn;
+
+    // First try to get from query string
     const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    const state = params.get('state'); // your userId
-    const expiresIn = params.get('expires_in');
+    code = params.get('code');
+    state = params.get('state');
+    expiresIn = params.get('expires_in');
+
+    // Fallback: try to extract from hash fragment
+    if (!code && window.location.hash) {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      code = hashParams.get('code');
+      state = hashParams.get('state');
+      expiresIn = hashParams.get('expires_in');
+    }
+
+    console.log('[PopupCallback] Extracted code:', code);
+    console.log('[PopupCallback] state (userId):', state);
 
     if (!code) {
-      // No “code” means something went wrong
       setError(
         'OAuth code not found in URL. Authorization failed or was cancelled.'
       );
       return;
     }
 
-    // Send the code (and state) back to the opener window
+    // Send to parent
     window.opener.postMessage(
       { code, state, expires_in: expiresIn },
       window.location.origin
     );
 
-    console.log('[PopupCallback] OAuth code received:', code);
-    console.log(
-      '[PopupCallback] Posting message back to opener with state:',
-      state
-    );
-
-    // Close this popup immediately
+    // Close popup
     window.close();
   }, []);
+  
 
   return (
     <div style={{ padding: '2rem', textAlign: 'center' }}>
