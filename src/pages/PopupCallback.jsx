@@ -36,18 +36,15 @@ export default function PopupCallback() {
           { code, state, expires_in: expiresIn },
           window.location.origin
         );
+        window.close();
       } else {
         console.error('[PopupCallback] window.opener is null or invalid');
+        setError('Unable to communicate with parent window. Please try again.');
       }
     } catch (err) {
       console.error('[PopupCallback] Error posting message to opener:', err);
     }
-
-    // Always try to close
-    window.close();
   }, []);
-  
-  
 
   return (
     <div style={{ padding: '2rem', textAlign: 'center' }}>

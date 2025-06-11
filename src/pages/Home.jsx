@@ -132,12 +132,12 @@ export default function Home({ handleLogout }) {
       const left = window.screenX + (window.innerWidth - width) / 2;
       const top = window.screenY + (window.innerHeight - height) / 2;
 
-      const popup = window.open(
-        `${backendBase}/auth/ebay-login?userId=${user.id}`,
-        'EbayOAuthPopup',
+      const authUrl = `${backendBase}/auth/ebay-login?userId=${user.id}`;
+      window.open(
+        authUrl,
+        '_blank',
         `width=${width},height=${height},top=${top},left=${left}`
       );
-      popupRef.current = popup;
     };
 
     return (
