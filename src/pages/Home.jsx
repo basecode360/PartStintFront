@@ -50,6 +50,7 @@ export default function Home({ handleLogout }) {
           console.log('[Home.jsx] Exchange response from backend:', resp);
 
           if (!resp.success) throw new Error(resp.error || 'Exchange failed');
+          localStorage.setItem('userId', user.id);
           localStorage.setItem('ebay_user_token', resp.data.access_token);
           setEbayToken(resp.data.access_token);
           setNeedsConnection(false);
@@ -73,15 +74,25 @@ export default function Home({ handleLogout }) {
       }
       try {
         // Pass user.id into getValidAuthToken so it can do GET /auth/token?userId=<…>
-        const token = await getValidAuthToken(user.id);
-        if (!token) {
-          // Backend says “no eBay token stored yet” → show the Connect button.
+        const localToken = localStorage.getItem('ebay_user_token');
+
+        if (localToken) {
+          // Optimistically use local token first
+          setEbayToken(localToken);
+          setNeedsConnection(false);
+        }
+
+        // Validate with backend anyway (to refresh if needed)
+        const freshToken = await getValidAuthToken(user.id);
+
+        if (freshToken) {
+          localStorage.setItem('ebay_user_token', freshToken);
+          setEbayToken(freshToken);
+          setNeedsConnection(false);
+        } else {
           setNeedsConnection(true);
-          return;
         }
         // We have a valid (or freshly‐refreshed) eBay token:
-        setEbayToken(token);
-        setNeedsConnection(false);
       } catch (err) {
         console.warn('⚠️ Unable to fetch/refresh eBay token:', err);
         setNeedsConnection(true);
