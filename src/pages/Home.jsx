@@ -51,7 +51,22 @@ export default function Home({ handleLogout }) {
 
           if (!resp.success) throw new Error(resp.error || 'Exchange failed');
           localStorage.setItem('userId', user.id);
-          localStorage.setItem('ebay_user_token', resp.data.access_token);
+
+          const expiresIn = resp.data.expires_in || 7200; // fallback to 2h
+          const expiresAt = Date.now() + expiresIn * 1000;
+
+          localStorage.setItem(
+            'ebay_user_token',
+            JSON.stringify({
+              value: resp.data.access_token,
+              expiry: expiresAt,
+            })
+          );
+
+          if (resp.data.refresh_token) {
+            localStorage.setItem('ebay_refresh_token', resp.data.refresh_token);
+          }
+
           setEbayToken(resp.data.access_token);
           setNeedsConnection(false);
         } catch (err) {
