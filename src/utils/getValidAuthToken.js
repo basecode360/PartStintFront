@@ -44,14 +44,15 @@ const getValidAuthToken = async (userId) => {
     typeof resp.data.access_token === 'string'
   ) {
     const newToken = resp.data.access_token;
-    const expiresIn = resp.data.expires_in || 7200; // fallback to 2h
+    const expiresIn = resp.data.expires_in_seconds;
 
-    const tokenObject = {
-      value: newToken,
-      expiry: Date.now() + expiresIn * 1000,
-    };
-
-    localStorage.setItem('ebay_user_token', JSON.stringify(tokenObject));
+    localStorage.setItem(
+      'ebay_user_token',
+      JSON.stringify({
+        value: newToken,
+        expiry: Date.now() + expiresIn * 1000,
+      })
+    );
     return newToken;
   }
 
