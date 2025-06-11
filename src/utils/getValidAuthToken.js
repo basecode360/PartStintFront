@@ -1,6 +1,5 @@
 // src/utils/getValidAuthToken.js
 import apiService from '../api/apiService';
-import { userStore } from '../store/authStore';
 
 /**
  * Try to return a valid eBay user‐token (accessToken).
@@ -11,14 +10,7 @@ import { userStore } from '../store/authStore';
  * 3) If backend returns success:{true, auth_token:…}, save it to localStorage
  *    and return it; else return null.
  */
-const getValidAuthToken = async () => {
-  const { user } = userStore.getState();
-  if (!user || !user.id) {
-    // Nobody is logged in, so we cannot fetch/refresh an eBay token.
-    return null;
-  }
-  const userId = user.id;
-
+const getValidAuthToken = async (userId) => {
   // 1) Check localStorage for a still‐valid eBay token:
   const raw = localStorage.getItem('ebay_user_token');
   if (raw) {
@@ -45,14 +37,14 @@ const getValidAuthToken = async () => {
   }
 
   // 3) If the backend says “success: true” with a fresh auth_token, store it:
-  if (resp && resp.success && typeof resp.auth_token === 'string') {
-    const newToken = resp.auth_token;
-    const expiresIn = Number(resp.expires_in_seconds) || 0;
-    const serverExpiryMs = Date.now() + expiresIn * 1000;
-    localStorage.setItem(
-      'ebay_user_token',
-      JSON.stringify({ value: newToken, expiry: serverExpiryMs })
-    );
+  if (
+    resp &&
+    resp.success &&
+    resp.data &&
+    typeof resp.data.access_token === 'string'
+  ) {
+    const newToken = resp.data.access_token;
+    localStorage.setItem('ebay_user_token', newToken);
     return newToken;
   }
 
