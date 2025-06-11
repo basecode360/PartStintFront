@@ -24,6 +24,12 @@ export default function PopupCallback() {
       window.location.origin
     );
 
+    console.log('[PopupCallback] OAuth code received:', code);
+    console.log(
+      '[PopupCallback] Posting message back to opener with state:',
+      state
+    );
+
     // Close this popup immediately
     window.close();
   }, []);

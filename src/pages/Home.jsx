@@ -25,9 +25,45 @@ export default function Home({ handleLogout }) {
   const user = userStore((store) => store.user);
   const location = useLocation();
   const popupRef = useRef(null); // will hold reference to the OAuth popup window
-  const pollingRef = useRef(null); // will hold reference to our setInterval poll
 
-  // 1) On mount (and whenever the “user” changes), try to fetch/refresh the eBay token.
+  // Handle OAuth popup messages
+  useEffect(() => {
+    const handleMessage = async (event) => {
+      console.log('[Home.jsx] Received postMessage from popup:', event.data);
+
+      if (event.origin !== window.location.origin) return;
+
+      const { code, state, expires_in } = event.data;
+
+      if (code && user?.id) {
+        try {
+          console.log('[Home.jsx] Sending code to backend for exchange:', {
+            code,
+            userId: user.id,
+          });
+
+          const resp = await apiService.auth.exchangeCode({
+            code,
+            userId: user.id,
+          });
+
+          console.log('[Home.jsx] Exchange response from backend:', resp);
+
+          if (!resp.success) throw new Error(resp.error || 'Exchange failed');
+          localStorage.setItem('ebay_user_token', resp.data.access_token);
+          setEbayToken(resp.data.access_token);
+          setNeedsConnection(false);
+        } catch (err) {
+          console.error('❌ Error exchanging code:', err);
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [user]);
+
+  // 1) On mount (and whenever the "user" changes), try to fetch/refresh the eBay token.
   //    If none is available, show “Connect to eBay” button.
   useEffect(() => {
     async function checkToken() {
@@ -102,70 +138,6 @@ export default function Home({ handleLogout }) {
         `width=${width},height=${height},top=${top},left=${left}`
       );
       popupRef.current = popup;
-
-      // 3b) Start polling **every 500ms** until the popup’s location changes to our frontend callback
-      pollingRef.current = setInterval(() => {
-        try {
-          // We can only read popup.location.href when it’s on our same‐origin page.
-          // Initially, the popup is at http://localhost:5000/auth/login, then redirects to eBay (cross‐origin),
-          // so reading href will throw until it finally lands on http://localhost:5174/auth/popup-callback
-          const currentUrl = popup.location.href;
-          const ourOrigin = window.location.origin; // e.g. "http://localhost:5174"
-
-          // Check if it has arrived back at our popup‐callback:
-          if (
-            currentUrl.startsWith(ourOrigin + '/auth/popup-callback') &&
-            currentUrl.includes('code=')
-          ) {
-            // Extract “code” from the URL:
-            const urlObj = new URL(currentUrl);
-            const code = urlObj.searchParams.get('code');
-            const expiresIn = urlObj.searchParams.get('expires_in');
-
-            if (code) {
-              // Stop polling and proceed:
-              clearInterval(pollingRef.current);
-
-              // 3c) Exchange that code for an eBay access_token (+ refresh token) by calling our backend:
-              (async () => {
-                try {
-                  const resp = await apiService.auth.exchangeCode({
-                    code,
-                    userId: user.id,
-                  });
-                  if (!resp.success) {
-                    throw new Error(resp.error || 'Exchange code failed');
-                  }
-                  const { access_token } = resp.data;
-                  // 3d) Save the eBay access token in localStorage so axios interceptors can pick it up:
-                  localStorage.setItem('ebay_user_token', access_token);
-
-                  // 3e) Update component state so the dashboard now loads:
-                  setEbayToken(access_token);
-                  setNeedsConnection(false);
-                } catch (err) {
-                  console.error('Error exchanging code in parent window:', err);
-                } finally {
-                  // 3f) Close the popup if it’s still open:
-                  if (popup && !popup.closed) popup.close();
-                }
-              })();
-            }
-          }
-        } catch (err) {
-          // While the popup is on eBay’s domain, reading popup.location.href will throw cross‐origin errors.
-          // We simply ignore those until it finally comes back to “/auth/popup-callback”.
-        }
-
-        // If the user manually closed the popup, stop polling:
-        if (popup && popup.closed) {
-          clearInterval(pollingRef.current);
-          popupRef.current = null;
-          console.warn(
-            'OAuth popup was closed before completing authentication.'
-          );
-        }
-      }, 500);
     };
 
     return (
