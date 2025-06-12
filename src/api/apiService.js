@@ -63,7 +63,8 @@ competitorClient.interceptors.request.use((config) => {
 const inventory = {
   getActiveListings: async () => {
     try {
-      const resp = await apiClient.get('/active-listings');
+      const userId = localStorage.getItem('user_id'); // Or however it's stored
+      const resp = await apiClient.get(`/active-listings?userId=${userId}`);
       return resp.data;
     } catch (err) {
       console.error('Error @ getActiveListings:', err);
