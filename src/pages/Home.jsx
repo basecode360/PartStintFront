@@ -88,14 +88,7 @@ export default function Home({ handleLogout }) {
       // 1. Try localStorage first
       const localToken = localStorage.getItem('ebay_user_token');
       if (localToken) {
-        try {
-          const parsed = JSON.parse(localToken);
-          if (parsed?.value) {
-            setEbayToken(parsed.value); // ✔️ actual token
-          }
-        } catch {
-          console.warn('Malformed ebay_user_token in localStorage');
-        }
+        setEbayToken(localToken); // use it
         setNeedsConnection(false); // hide "connect" button
       }
 

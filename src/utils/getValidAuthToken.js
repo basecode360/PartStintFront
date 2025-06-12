@@ -37,10 +37,14 @@ const getValidAuthToken = async (userId) => {
   }
 
   // 3) If the backend says "success: true" with a fresh auth_token, store it:
-  if (resp && resp.success && (resp.data?.access_token || resp.auth_token)) {
-    const newToken = resp.data?.access_token || resp.auth_token;
-    const expiresIn =
-      resp.data?.expires_in_seconds || resp.expires_in_seconds || 7200;
+  if (
+    resp &&
+    resp.success &&
+    resp.data &&
+    typeof resp.data.access_token === 'string'
+  ) {
+    const newToken = resp.data.access_token;
+    const expiresIn = resp.data.expires_in_seconds;
 
     localStorage.setItem(
       'ebay_user_token',
