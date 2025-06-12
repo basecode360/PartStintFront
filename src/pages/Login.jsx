@@ -58,7 +58,7 @@ export default function Login({ handleLogin }) {
 
         // 3) Fetch a valid eBay user token immediately
         try {
-          const ebayToken = await getValidAuthToken();
+          const ebayToken = await getValidAuthToken(loggedUser.id);
           console.log('Obtained eBay token:', ebayToken);
         } catch (ebayErr) {
           console.warn('Could not fetch eBay token immediately:', ebayErr);
