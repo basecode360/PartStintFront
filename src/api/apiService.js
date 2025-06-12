@@ -30,13 +30,20 @@ function getRawEbayTokenFromStorage() {
   return localStorage.getItem('ebay_user_token');
 }
 
-function parseEbayTokenValue() {
-  return localStorage.getItem('ebay_user_token') || '';
+function getAppJwtToken() {
+  try {
+    const store = JSON.parse(localStorage.getItem('user-store') || '{}');
+    const token = store?.state?.user?.token;
+    return typeof token === 'string' ? token : '';
+  } catch (e) {
+    console.warn('Could not parse user-store:', e);
+    return '';
+  }
 }
 
 // Before each request to /api/ebay or /api/pricing-strategies or /api/competitor-rules:
 apiClient.interceptors.request.use((config) => {
-  const token = parseEbayTokenValue();
+  const token = getAppJwtToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -44,15 +51,21 @@ apiClient.interceptors.request.use((config) => {
 });
 
 pricingClient.interceptors.request.use((config) => {
-  const token = parseEbayTokenValue();
+  const token = getAppJwtToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+    console.log(
+      '✅ JWT attached to pricingClient:',
+      token.slice(0, 20) + '...'
+    );
+  } else {
+    console.warn('❌ Missing JWT for pricingClient');
   }
   return config;
 });
 
 competitorClient.interceptors.request.use((config) => {
-  const token = parseEbayTokenValue();
+  const token = getAppJwtToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -99,9 +112,7 @@ const inventory = {
   },
   getCompetitorPrice: async (itemId) => {
     try {
-      const resp = await apiClient.get(
-        `/pricing-strategies/products/${itemId}`
-      );
+      const resp = await apiClient.get(`/competitor-prices/${itemId}`);
       const data = resp.data?.competitorPrices || {
         allData: [],
         allPrices: [],
@@ -174,36 +185,66 @@ const auth = {
 
 /** ————————————— PRICING STRATEGIES ————————————— **/
 const pricingStrategies = {
+  createStrategy: async (strategyData) => {
+    try {
+      const resp = await pricingClient.post('/', strategyData);
+      return resp.data;
+    } catch (err) {
+      console.error('Error @ createStrategy:', err);
+      if (err.response?.status === 401) {
+        throw new Error('Authentication failed. Please log in again.');
+      }
+      throw err;
+    }
+  },
   createStrategyOnProduct: async (itemId, strategyData) => {
     try {
-      const resp = await pricingClient.post(
-        `/products/${itemId}`,
-        strategyData
-      );
-      return resp.data;
+      // First create the strategy
+      const strategyResp = await pricingClient.post('/', strategyData);
+      if (!strategyResp.data.success) {
+        throw new Error(
+          strategyResp.data.message || 'Failed to create strategy'
+        );
+      }
+
+      const strategyId = strategyResp.data.data._id;
+
+      // Then apply it to the product
+      const applyResp = await pricingClient.post(`/products/${itemId}`, {
+        strategyIds: [strategyId],
+      });
+
+      return {
+        success: true,
+        strategy: strategyResp.data.data,
+        application: applyResp.data,
+      };
     } catch (err) {
       console.error('Error @ createStrategyOnProduct:', err);
+      if (err.response?.status === 401) {
+        throw new Error('Authentication failed. Please log in again.');
+      }
       throw err;
     }
   },
-  createStrategyForAllActive: async (strategyData) => {
+  applyStrategyToProduct: async (itemId, strategyIds) => {
     try {
-      const resp = await pricingClient.post(
-        `/assign-to-all-active`,
-        strategyData
-      );
+      const resp = await pricingClient.post(`/products/${itemId}`, {
+        strategyIds: Array.isArray(strategyIds) ? strategyIds : [strategyIds],
+      });
       return resp.data;
     } catch (err) {
-      console.error('Error @ createStrategyForAllActive:', err);
+      console.error('Error @ applyStrategyToProduct:', err);
+      if (err.response?.status === 401) {
+        throw new Error('Authentication failed. Please log in again.');
+      }
       throw err;
     }
   },
+
   getStrategyFromProduct: async (itemId) => {
     try {
-      const userId = localStorage.getItem('user_id');
-      const resp = await pricingClient.get(`/products/${itemId}`, {
-        params: { userId },
-      });
+      const resp = await pricingClient.get(`/products/${itemId}`);
       return resp.data;
     } catch (err) {
       console.error('Error @ getStrategyFromProduct:', err);
@@ -361,9 +402,42 @@ const competitorRules = {
       const resp = await competitorClient.get(`/active-listings`, {
         params: { userId },
       });
-      return resp.data;
+
+      // Extract unique rules from listings
+      const rulesFromListings = (resp.data.listings || [])
+        .map((l) => l.competitorRule)
+        .filter((r) => r !== null && typeof r === 'object');
+
+      const ruleMap = new Map();
+      rulesFromListings.forEach((rule) => {
+        ruleMap.set(rule._id, rule);
+      });
+
+      return {
+        success: true,
+        rules: Array.from(ruleMap.values()), // deduplicated
+      };
     } catch (err) {
       console.error('Error @ getAllUniqueRules:', err);
+      return { success: false, error: err.message };
+    }
+  },
+  getAllRules: async () => {
+    try {
+      const userId = localStorage.getItem('user_id');
+      const resp = await competitorClient.get(`/`, {
+        params: { active: true, userId },
+      });
+      return {
+        success: true,
+        rules: resp.data?.data || [],
+      };
+    } catch (err) {
+      if (err.response?.status === 404) {
+        console.warn('No active rules found for the user.');
+        return { success: true, rules: [] }; // Return an empty list if 404
+      }
+      console.error('Error @ getAllRules:', err);
       return { success: false, error: err.message };
     }
   },
@@ -396,9 +470,9 @@ const combined = {
     try {
       const [strategiesRes, rulesRes] = await Promise.allSettled([
         pricingStrategies.getAllUniqueStrategies(),
-        competitorRules.getAllUniqueRules(),
+        competitorRules.getAllRules(), // Updated to use getAllRules
       ]);
-      return {
+      const allOptions = {
         success: true,
         strategies:
           strategiesRes.status === 'fulfilled'
@@ -415,6 +489,8 @@ const combined = {
             rulesRes.status === 'rejected' ? rulesRes.reason.message : null,
         },
       };
+      console.log('All options from API:', allOptions); // Debug log added
+      return allOptions;
     } catch (err) {
       console.error('Error @ combined.getAllOptionsForDropdowns:', err);
       return { success: false, error: err.message, strategies: [], rules: [] };

@@ -84,7 +84,7 @@ export default function AppRoutes() {
       >
         <Route path="edit-listing" element={<EditListing />} />
         <Route path="edit-price" element={<EditProductPrice />} />
-        <Route path="update-strategy" element={<PriceStrategy />} />
+        <Route path="update-strategy/:productId" element={<PriceStrategy />} />
         <Route path="competitors/:itemId" element={<CompetitorDetails />} />
         <Route path="add-strategy" element={<AddStrategy />} />
         <Route path="add-competitor-rule" element={<CompetitorRule />} />

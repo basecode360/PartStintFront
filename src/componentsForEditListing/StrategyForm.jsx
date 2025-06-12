@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from 'react';
 import {
   Container,
   Box,
@@ -10,30 +10,31 @@ import {
   Collapse,
   IconButton,
   CircularProgress,
-} from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import { useProductStore } from "../store/productStore";
-import { useNavigate } from "react-router-dom";
-import apiService from "../api/apiService";
+} from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useProductStore } from '../store/productStore';
+import apiService from '../api/apiService';
 
 export default function EditStrategy() {
-  const { ItemId, AllProducts, modifyProductsObj, sku } = useProductStore();
-  const [product, setProduct] = useState([]);
+  const { productId } = useParams(); // Get dynamic ID from route
+  const { AllProducts } = useProductStore();
+  const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [oldPrice, setOldPrice] = useState(0);
   const navigate = useNavigate();
 
   // Form state
   const [formData, setFormData] = useState({
-    selectedStrategy: "",
-    selectedCompetitorRule: "",
-    myLandedPrice: "",
-    lowestPrice: "",
-    minPrice: "",
-    maxPrice: "",
-    notes: "",
+    selectedStrategy: '',
+    selectedCompetitorRule: '',
+    myLandedPrice: '',
+    lowestPrice: '',
+    minPrice: '',
+    maxPrice: '',
+    notes: '',
   });
 
   // Available strategies and rules (fetched from APIs)
@@ -42,66 +43,55 @@ export default function EditStrategy() {
 
   // Alert state
   const [alertOpen, setAlertOpen] = useState(false);
-  const [alertMessage, setAlertMessage] = useState("");
-  const [alertSeverity, setAlertSeverity] = useState("info");
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertSeverity, setAlertSeverity] = useState('info');
 
   // Fetch product data
   useEffect(() => {
-    const fetchProductData = async () => {
+    const fetchData = async () => {
       try {
-        console.log("product data fetching ", sku);
         setLoading(true);
-        const productObj = AllProducts.filter((item) =>
-          item.sku ? item.sku === sku : item.productId === ItemId
-        );
 
-        if (productObj.length === 0) {
-          setError("Product not found");
+        // Find product from AllProducts
+        const foundProduct = AllProducts.find((p) => p.productId === productId);
+        if (!foundProduct) {
+          setError('Product not found');
           return;
         }
 
-        setProduct(productObj);
-        modifyProductsObj(productObj);
+        setProduct(foundProduct);
 
-        // Set oldPrice from product data
-        if (productObj[0]?.myPrice) {
-          const priceString = productObj[0].myPrice;
-          const priceValue = priceString.includes(" ")
-            ? priceString.split(" ")[1]
-            : priceString.replace(/[^0-9.]/g, "");
+        const priceString = foundProduct.myPrice;
+        const priceValue = priceString.includes(' ')
+          ? priceString.split(' ')[1]
+          : priceString.replace(/[^0-9.]/g, '');
+        setOldPrice(priceValue);
 
-          setOldPrice(priceValue);
+        setFormData((prev) => ({
+          ...prev,
+          myLandedPrice: priceValue,
+          minPrice: (parseFloat(priceValue) * 0.9).toFixed(2),
+          maxPrice: (parseFloat(priceValue) * 1.5).toFixed(2),
+        }));
 
-          // Initialize form values with product price
-          setFormData((prev) => ({
-            ...prev,
-            myLandedPrice: priceValue,
-            minPrice: (parseFloat(priceValue) * 0.9).toFixed(2), // 10% below
-            maxPrice: (parseFloat(priceValue) * 1.5).toFixed(2), // 50% above
-          }));
-        }
-
-        // Fetch existing strategies and rules for this product
-        await fetchExistingData();
+        // Strategy/Rule fetching
+        await fetchExistingData(productId);
       } catch (err) {
-        setError("Error loading product data: " + err.message);
-        console.error("Error loading product:", err);
+        setError('Failed to load product: ' + err.message);
       } finally {
         setLoading(false);
       }
     };
 
-    if (ItemId) {
-      fetchProductData();
-    }
-  }, [ItemId, AllProducts, modifyProductsObj]);
+    fetchData();
+  }, [productId, AllProducts]);
 
   // Fetch existing strategies and competitor rules
-  const fetchExistingData = async () => {
+  const fetchExistingData = async (id) => {
     try {
       // Fetch individual strategy and rule (if set on the product)
       const { strategy, rule } =
-        await apiService.combined.getProductRulesAndStrategies(ItemId);
+        await apiService.combined.getProductRulesAndStrategies(id);
 
       if (strategy?.hasPricingStrategy && strategy.pricingStrategy) {
         setFormData((prev) => ({
@@ -120,37 +110,27 @@ export default function EditStrategy() {
       // Always fetch all dropdown options
       const allOptions = await apiService.combined.getAllOptionsForDropdowns();
 
-      if (allOptions.strategies?.length > 0) {
+      if (allOptions.strategies?.length > 0)
         setAvailableStrategies(allOptions.strategies);
-      }
-
-      if (allOptions.rules?.length > 0) {
-        setAvailableRules(allOptions.rules);
-      }
-    } catch (error) {
-      console.error("Error fetching existing and dropdown data:", error);
+      if (allOptions.rules?.length > 0) setAvailableRules(allOptions.rules);
+    } catch (err) {
+      console.error('Error fetching strategy/rule options:', err);
     }
   };
 
   // Handle input changes
-  const handleInputChange = (event) => {
-    const { name, value } = event.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   // Show alert
-  const showAlert = (message, severity) => {
-    setAlertMessage(message);
-    setAlertSeverity(severity);
+  const showAlert = (msg, type) => {
+    setAlertMessage(msg);
+    setAlertSeverity(type);
     setAlertOpen(true);
-
-    if (severity === "success") {
-      setTimeout(() => {
-        setAlertOpen(false);
-      }, 5000);
+    if (type === 'success') {
+      setTimeout(() => setAlertOpen(false), 4000);
     }
   };
 
@@ -159,33 +139,19 @@ export default function EditStrategy() {
     try {
       setSubmitting(true);
 
-      // Validate required fields
       if (!formData.selectedStrategy) {
-        showAlert("Please select a pricing strategy", "error");
+        showAlert('Please select a pricing strategy', 'error');
         return;
       }
 
-      if (!formData.minPrice || !formData.maxPrice) {
-        showAlert("Min price and max price are required", "error");
-        return;
-      }
-
-      if (parseFloat(formData.minPrice) >= parseFloat(formData.maxPrice)) {
-        showAlert("Min price must be less than max price", "error");
-        return;
-      }
-
-      // Find the selected strategy details
       const selectedStrategyObj = availableStrategies.find(
         (s) => s.strategyName === formData.selectedStrategy
       );
-
       if (!selectedStrategyObj) {
-        showAlert("Selected strategy not found", "error");
+        showAlert('Invalid strategy selected', 'error');
         return;
       }
 
-      // Prepare update payload with new min/max prices
       const updatePayload = {
         ...selectedStrategyObj,
         minPrice: parseFloat(formData.minPrice),
@@ -193,23 +159,14 @@ export default function EditStrategy() {
         notes: formData.notes,
       };
 
-      console.log("Updating strategy with payload:", updatePayload);
-
-      // Update the strategy
-      const response =
-        await apiService.pricingStrategies.updateStrategyOnProduct(
-          ItemId,
-          updatePayload
-        );
-
-      console.log("Update response:", response);
-      showAlert("Pricing strategy updated successfully!", "success");
-
-      // Refresh the data
-      await fetchExistingData();
-    } catch (error) {
-      console.error("Error updating strategy:", error);
-      showAlert(`Error: ${error.message}`, "error");
+      await apiService.pricingStrategies.updateStrategyOnProduct(
+        productId,
+        updatePayload
+      );
+      showAlert('Strategy updated successfully!', 'success');
+      await fetchExistingData(productId);
+    } catch (err) {
+      showAlert('Failed to update: ' + err.message, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -217,44 +174,23 @@ export default function EditStrategy() {
 
   if (loading) {
     return (
-      <Container>
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            height: "50vh",
-          }}
-        >
-          <CircularProgress />
-        </Box>
-      </Container>
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 5 }}>
+        <CircularProgress />
+      </Box>
     );
   }
 
-  if (error && !product.length) {
+  if (error) {
     return (
-      <Container>
-        <Box sx={{ p: 4 }}>
-          <Alert severity="error">
-            {error}
-            <Button
-              variant="outlined"
-              size="small"
-              sx={{ ml: 2 }}
-              onClick={() => navigate("/inventory")}
-            >
-              Back to Inventory
-            </Button>
-          </Alert>
-        </Box>
-      </Container>
+      <Alert severity="error" sx={{ m: 3 }}>
+        {error} <Button onClick={() => navigate('/home')}>Go Back</Button>
+      </Alert>
     );
   }
 
   return (
     <Container>
-      <Box sx={{ px: 4, py: 5, width: "100%", maxWidth: 700 }}>
+      <Box sx={{ px: 4, py: 5, width: '100%', maxWidth: 700 }}>
         {/* Alert */}
         <Collapse in={alertOpen}>
           <Alert
@@ -280,7 +216,7 @@ export default function EditStrategy() {
           variant="h5"
           fontWeight="bold"
           mb={3}
-          sx={{ textAlign: "left", color: "#333" }}
+          sx={{ textAlign: 'left', color: '#333' }}
         >
           Pricing Configuration
         </Typography>
@@ -291,19 +227,19 @@ export default function EditStrategy() {
             variant="body1"
             color="primary"
             fontWeight={600}
-            sx={{ textAlign: "left", fontSize: "15px" }}
+            sx={{ textAlign: 'left', fontSize: '15px' }}
           >
-            {product[0]?.productTitle || "Product"}
+            {product?.productTitle || 'Product'}
             <br />
             <Typography variant="caption" color="text.secondary">
-              {product[0]?.productId || ItemId} |{" "}
-              <span style={{ color: "#2E865F" }}>Active</span>
+              {product?.productId || productId} |{' '}
+              <span style={{ color: '#2E865F' }}>Active</span>
             </Typography>
           </Typography>
         </Box>
 
         {/* Current Price Display */}
-        <Box mb={3} sx={{ textAlign: "left" }}>
+        <Box mb={3} sx={{ textAlign: 'left' }}>
           <Typography variant="body2" color="text.secondary">
             Current Price: <strong>${oldPrice}</strong>
           </Typography>
@@ -320,14 +256,14 @@ export default function EditStrategy() {
                 (s) => s.strategyName === formData.selectedStrategy
               )
                 ? formData.selectedStrategy
-                : ""
+                : ''
             }
             onChange={handleInputChange}
           >
             <MenuItem value="">Select a strategy</MenuItem>
             {availableStrategies.map((strategy, index) => (
               <MenuItem key={index} value={strategy.strategyName}>
-                {strategy.displayName}
+                {strategy.displayName || strategy.strategyName}
               </MenuItem>
             ))}
           </TextField>
@@ -335,20 +271,20 @@ export default function EditStrategy() {
           <Typography
             variant="body2"
             sx={{
-              color: "#1976d2",
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              fontSize: "16px",
+              color: '#1976d2',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              fontSize: '16px',
             }}
-            onClick={() => navigate("/home/add-strategy")}
+            onClick={() => navigate('/home/add-strategy')}
           >
             <Box
               component="span"
-              sx={{ fontWeight: "bold", mr: 0.5, fontSize: "20px" }}
+              sx={{ fontWeight: 'bold', mr: 0.5, fontSize: '20px' }}
             >
               +
-            </Box>{" "}
+            </Box>{' '}
             Add Strategy
           </Typography>
 
@@ -362,7 +298,7 @@ export default function EditStrategy() {
                 (r) => r.ruleName === formData.selectedCompetitorRule
               )
                 ? formData.selectedCompetitorRule
-                : ""
+                : ''
             }
             onChange={handleInputChange}
           >
@@ -377,20 +313,20 @@ export default function EditStrategy() {
           <Typography
             variant="body2"
             sx={{
-              color: "#1976d2",
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              fontSize: "16px",
+              color: '#1976d2',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              fontSize: '16px',
             }}
-            onClick={() => navigate("/home/add-competitor-rule")}
+            onClick={() => navigate('/home/add-competitor-rule')}
           >
             <Box
               component="span"
-              sx={{ fontWeight: "bold", mr: 0.5, fontSize: "20px" }}
+              sx={{ fontWeight: 'bold', mr: 0.5, fontSize: '20px' }}
             >
               +
-            </Box>{" "}
+            </Box>{' '}
             Add Competitor Rule
           </Typography>
 
@@ -401,11 +337,11 @@ export default function EditStrategy() {
             value={formData.myLandedPrice}
             onChange={handleInputChange}
             type="number"
-            inputProps={{ step: "0.01", min: "0" }}
+            inputProps={{ step: '0.01', min: '0' }}
             sx={{
-              "& .MuiInputLabel-root": { fontSize: "16px" },
-              "& .MuiInputBase-root": { fontSize: "16px" },
-              backgroundColor: "#f5f5f5",
+              '& .MuiInputLabel-root': { fontSize: '16px' },
+              '& .MuiInputBase-root': { fontSize: '16px' },
+              backgroundColor: '#f5f5f5',
             }}
           />
 
@@ -415,11 +351,11 @@ export default function EditStrategy() {
             value={formData.lowestPrice}
             onChange={handleInputChange}
             type="number"
-            inputProps={{ step: "0.01", min: "0" }}
+            inputProps={{ step: '0.01', min: '0' }}
             sx={{
-              "& .MuiInputLabel-root": { fontSize: "16px" },
-              "& .MuiInputBase-root": { fontSize: "16px" },
-              backgroundColor: "#f5f5f5",
+              '& .MuiInputLabel-root': { fontSize: '16px' },
+              '& .MuiInputBase-root': { fontSize: '16px' },
+              backgroundColor: '#f5f5f5',
             }}
           />
 
@@ -430,10 +366,10 @@ export default function EditStrategy() {
             onChange={handleInputChange}
             required
             type="number"
-            inputProps={{ step: "0.01", min: "0" }}
+            inputProps={{ step: '0.01', min: '0' }}
             sx={{
-              "& .MuiInputLabel-root": { fontSize: "16px" },
-              "& .MuiInputBase-root": { fontSize: "16px" },
+              '& .MuiInputLabel-root': { fontSize: '16px' },
+              '& .MuiInputBase-root': { fontSize: '16px' },
             }}
           />
 
@@ -444,10 +380,10 @@ export default function EditStrategy() {
             onChange={handleInputChange}
             required
             type="number"
-            inputProps={{ step: "0.01", min: "0" }}
+            inputProps={{ step: '0.01', min: '0' }}
             sx={{
-              "& .MuiInputLabel-root": { fontSize: "16px" },
-              "& .MuiInputBase-root": { fontSize: "16px" },
+              '& .MuiInputLabel-root': { fontSize: '16px' },
+              '& .MuiInputBase-root': { fontSize: '16px' },
             }}
           />
 
@@ -460,8 +396,8 @@ export default function EditStrategy() {
             multiline
             rows={3}
             sx={{
-              "& .MuiInputLabel-root": { fontSize: "16px" },
-              "& .MuiInputBase-root": { fontSize: "16px" },
+              '& .MuiInputLabel-root': { fontSize: '16px' },
+              '& .MuiInputBase-root': { fontSize: '16px' },
             }}
           />
 
@@ -472,22 +408,22 @@ export default function EditStrategy() {
             onClick={handleUpdate}
             disabled={submitting}
             sx={{
-              padding: "12px 20px",
-              width: "120px",
+              padding: '12px 20px',
+              width: '120px',
               fontWeight: 600,
-              fontSize: "16px",
-              borderRadius: "25px",
-              "&:hover": {
-                backgroundColor: "#1976d2",
-                boxShadow: "0px 4px 12px rgba(0, 0, 0, 0.1)",
+              fontSize: '16px',
+              borderRadius: '25px',
+              '&:hover': {
+                backgroundColor: '#1976d2',
+                boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
               },
-              transition: "all 0.3s ease-in-out",
+              transition: 'all 0.3s ease-in-out',
             }}
           >
             {submitting ? (
               <CircularProgress size={24} color="inherit" />
             ) : (
-              "Update"
+              'Update'
             )}
           </Button>
         </Box>
