@@ -64,7 +64,9 @@ const inventory = {
   getActiveListings: async () => {
     try {
       const userId = localStorage.getItem('user_id'); // Or however it's stored
-      const resp = await apiClient.get(`/active-listings?userId=${userId}`);
+      const resp = await apiClient.get('/active-listings', {
+        params: { userId },
+      });
       return resp.data;
     } catch (err) {
       console.error('Error @ getActiveListings:', err);
@@ -198,7 +200,10 @@ const pricingStrategies = {
   },
   getStrategyFromProduct: async (itemId) => {
     try {
-      const resp = await pricingClient.get(`/products/${itemId}`);
+      const userId = localStorage.getItem('user_id');
+      const resp = await pricingClient.get(`/products/${itemId}`, {
+        params: { userId },
+      });
       return resp.data;
     } catch (err) {
       console.error('Error @ getStrategyFromProduct:', err);
@@ -207,7 +212,10 @@ const pricingStrategies = {
   },
   getAllActiveWithStrategies: async () => {
     try {
-      const resp = await pricingClient.get(`/active-listings`);
+      const userId = localStorage.getItem('user_id');
+      const resp = await pricingClient.get(`/active-listings`, {
+        params: { userId },
+      });
       return resp.data;
     } catch (err) {
       console.error('Error @ getAllActiveWithStrategies:', err);
@@ -261,7 +269,10 @@ const pricingStrategies = {
   },
   getAllUniqueStrategies: async () => {
     try {
-      const resp = await pricingClient.get(`?active=true`);
+      const userId = localStorage.getItem('user_id');
+      const resp = await pricingClient.get(`/active-listings`, {
+        params: { userId, active: true },
+      });
       return resp.data;
     } catch (err) {
       console.error('Error @ getAllUniqueStrategies:', err);
@@ -295,7 +306,10 @@ const competitorRules = {
   },
   getRuleFromProduct: async (itemId) => {
     try {
-      const resp = await competitorClient.get(`/products/${itemId}`);
+      const userId = localStorage.getItem('user_id');
+      const resp = await competitorClient.get(`/products/${itemId}`, {
+        params: { userId },
+      });
       return resp.data;
     } catch (err) {
       console.error('Error @ getRuleFromProduct:', err);
@@ -304,7 +318,10 @@ const competitorRules = {
   },
   getAllActiveWithRules: async () => {
     try {
-      const resp = await competitorClient.get(`/active-listings`);
+      const userId = localStorage.getItem('user_id');
+      const resp = await competitorClient.get(`/active-listings`, {
+        params: { userId },
+      });
       return resp.data;
     } catch (err) {
       console.error('Error @ getAllActiveWithRules:', err);
@@ -340,7 +357,10 @@ const competitorRules = {
   },
   getAllUniqueRules: async () => {
     try {
-      const resp = await competitorClient.get(`/active-listings`);
+      const userId = localStorage.getItem('user_id');
+      const resp = await competitorClient.get(`/active-listings`, {
+        params: { userId },
+      });
       return resp.data;
     } catch (err) {
       console.error('Error @ getAllUniqueRules:', err);
