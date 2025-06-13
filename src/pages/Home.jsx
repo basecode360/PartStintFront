@@ -29,22 +29,16 @@ export default function Home({ handleLogout }) {
   // Handle OAuth popup messages
   useEffect(() => {
     const handleMessage = async (event) => {
-      
-
       if (event.origin !== window.location.origin) return;
 
       const { code, state, expires_in } = event.data;
 
       if (code && user?.id) {
         try {
-          
-
           const resp = await apiService.auth.exchangeCode({
             code,
             userId: user.id,
           });
-
-          
 
           if (!resp.success) throw new Error(resp.error || 'Exchange failed');
           localStorage.setItem('userId', user.id);
@@ -179,15 +173,34 @@ export default function Home({ handleLogout }) {
   // Handle global eBay token expiry events
   useEffect(() => {
     const handleTokenExpiry = () => {
-      
       setEbayToken(null);
       setNeedsConnection(true);
       setListingsError(null);
     };
 
+    const handleAuthFailure = () => {
+      console.warn(
+        '⚠️ Authentication failure detected. Clearing storage and reloading...'
+      );
+
+      // Clear all authentication-related data
+      localStorage.removeItem('user-store');
+      localStorage.removeItem('ebay_user_token');
+      localStorage.removeItem('ebay_refresh_token');
+      localStorage.removeItem('userId');
+      localStorage.removeItem('user_id');
+
+      // Reload the page to redirect to login
+      window.location.reload();
+    };
+
     window.addEventListener('ebayTokenExpired', handleTokenExpiry);
-    return () =>
+    window.addEventListener('authenticationFailed', handleAuthFailure);
+
+    return () => {
       window.removeEventListener('ebayTokenExpired', handleTokenExpiry);
+      window.removeEventListener('authenticationFailed', handleAuthFailure);
+    };
   }, []);
 
   // 3) If the user never connected to eBay, show “Connect to eBay” UI.
