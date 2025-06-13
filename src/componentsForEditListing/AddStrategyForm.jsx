@@ -177,10 +177,7 @@ export default function AddStrategyPage() {
         token = localStorage.getItem('app_jwt');
       }
 
-      console.log(
-        'Token check before API call:',
-        token ? 'Token exists' : 'No token found'
-      );
+      
 
       if (!token) {
         showAlert(
@@ -220,7 +217,7 @@ export default function AddStrategyPage() {
       }
 
       const strategyPayload = getPricingStrategyPayload();
-      console.log('Creating pricing strategy with payload:', strategyPayload);
+      
 
       let response;
       if (formData.assignToActiveListings) {
@@ -247,7 +244,7 @@ export default function AddStrategyPage() {
         );
       }
 
-      console.log('Pricing strategy response:', response);
+      
 
       // Navigate back after success
       setTimeout(() => {

@@ -37,11 +37,11 @@ export default function Login({ handleLogin }) {
   const handleLoginClick = async () => {
     try {
       setError('');
-      console.log('Login attempt with:', email, password);
+      
 
       // 1) Call backend: POST /auth/login
       const response = await apiService.auth.login({ email, password });
-      console.log('Login response:', response);
+      
 
       if (response.success) {
         const { user: loggedUser, token: appJwt } = response.data;
@@ -59,7 +59,7 @@ export default function Login({ handleLogin }) {
         // 3) Fetch a valid eBay user token immediately
         try {
           const ebayToken = await getValidAuthToken(loggedUser.id);
-          console.log('Obtained eBay token:', ebayToken);
+          
         } catch (ebayErr) {
           console.warn('Could not fetch eBay token immediately:', ebayErr);
           // You may still proceed or force eBay link depending on UX

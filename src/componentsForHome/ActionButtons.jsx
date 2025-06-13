@@ -12,7 +12,7 @@ export default function ActionButtons() {
   
   const triggerAutoSync = async () => {
     // Logic to trigger auto-sync of listings
-    console.log("Auto-sync of listings triggered");
+    
     try {
       const data = {
         syncType: "all",
@@ -22,7 +22,7 @@ export default function ActionButtons() {
         dryRun: false,
       };
       const response = await apiService.inventory.triggerAutoSync(data);
-      console.log("Auto-sync response:", response);
+      
     } catch (error) {
       console.error("Error triggering auto-sync:", error.Message);
       // Handle error appropriately, e.g., show a notification or alert

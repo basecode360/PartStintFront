@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -13,52 +13,80 @@ import {
   Box,
   Button,
   Link,
-} from "@mui/material";
-import apiService from "../api/apiService";
-import { useProductStore } from "../store/productStore";
+} from '@mui/material';
+import apiService from '../api/apiService';
+import { useProductStore } from '../store/productStore';
 
 export default function CompetitorPricesPage() {
   const { itemId } = useParams();
   const [loading, setLoading] = useState(true);
   const [competitorData, setCompetitorData] = useState([]);
-  const [myItemTitle, setMyItemTitle] = useState("");
+  const [myItemTitle, setMyItemTitle] = useState('');
   const [error, setError] = useState(null);
   const [acceptedId, setAcceptedId] = useState(null);
   const competitors = useProductStore((state) => state.competitors);
   const productObj = useProductStore((state) => state.productObj);
-  // console.log(`CompetitorPricesPage itemId: ${competitors[0].allPrices}, itemIdFromStore: ${itemIdFromStore}`);
+  // 
   useEffect(() => {
     async function fetchData() {
       try {
-        // const res = await apiService.inventory.getCompetitorPrice(itemId);
+        // Call the actual competitor prices API
+        
+        const competitorResponse =
+          await apiService.inventory.getCompetitorPrice(itemId);
 
-        console.log(`Fetching competitor prices for itemId: ${competitors}`);
+        
+
         if (productObj.title) setMyItemTitle(productObj.title);
 
-        if (competitors.length > 0) {
-          // If using mock data, generate dummy competitor metadata
-          const detailed = competitors.map((p, i) => ({
-            id: p.id,
+        // Use API response data instead of store data
+        if (
+          competitorResponse.success !== false &&
+          competitorResponse.productInfo &&
+          competitorResponse.productInfo.length > 0
+        ) {
+          const detailed = competitorResponse.productInfo.map((p, i) => ({
+            id: p.id || `comp-${i}`,
             title: p.title,
             imageurl: p.imageurl,
-            country: p.locale,
+            country: p.locale || 'Unknown',
             image: p.imageurl,
             url: p.productUrl,
             price: p.price,
-            currency: p.currency,
-            mpn: "None",
-            upc: "None",
-            ean: "None",
-            isbn: "None",
+            currency: 'USD', // Default currency
+            mpn: 'None',
+            upc: 'None',
+            ean: 'None',
+            isbn: 'None',
           }));
 
-          console.log(detailed);
+          
           setCompetitorData(detailed);
         } else {
-          setError("No competitor listings found.");
+          // Fallback to store data if API doesn't return data
+          if (competitors.length > 0) {
+            const detailed = competitors.map((p, i) => ({
+              id: p.id,
+              title: p.title,
+              imageurl: p.imageurl,
+              country: p.locale,
+              image: p.imageurl,
+              url: p.productUrl,
+              price: p.price,
+              currency: p.currency,
+              mpn: 'None',
+              upc: 'None',
+              ean: 'None',
+              isbn: 'None',
+            }));
+            setCompetitorData(detailed);
+          } else {
+            setError('No competitor listings found.');
+          }
         }
       } catch (err) {
-        setError("Failed to fetch competitor prices.");
+        console.error('Error fetching competitor prices:', err);
+        setError('Failed to fetch competitor prices.');
       } finally {
         setLoading(false);
       }
@@ -73,17 +101,17 @@ export default function CompetitorPricesPage() {
       const response = await apiService.inventory.editPrice({
         itemId,
         newPrice: numericPrice,
-        reason: "Accepted competitor price",
+        reason: 'Accepted competitor price',
       });
 
       if (response.success) {
         setAcceptedId(comp.id);
         alert(`Updated price to USD ${numericPrice}`);
       } else {
-        alert("Failed to update price.");
+        alert('Failed to update price.');
       }
     } catch (err) {
-      alert("An error occurred while updating price.");
+      alert('An error occurred while updating price.');
     }
   };
 
@@ -94,7 +122,7 @@ export default function CompetitorPricesPage() {
   return (
     <Container sx={{ mt: 4 }}>
       <Typography variant="h5" gutterBottom>
-        Compitetor Listing For: {myItemTitle || itemId}
+        Competitor Listing For: {myItemTitle || itemId}
       </Typography>
 
       {loading ? (
@@ -139,15 +167,6 @@ export default function CompetitorPricesPage() {
                     </TableCell>
                     <TableCell>
                       <Box display="flex" gap={1}>
-                        <Button
-                          variant="contained"
-                          size="small"
-                          color="success"
-                          onClick={() => handleAccept(comp)}
-                          disabled={acceptedId === comp.id}
-                        >
-                          {acceptedId === comp.id ? "Accepted" : "Accept"}
-                        </Button>
                         <Button
                           variant="outlined"
                           size="small"

@@ -248,12 +248,12 @@ export default function EditListing() {
     }
     
     // Submit the payload
-    console.log('Submitting pricing strategy:', payload);
+    
     
     try {
       setSubmitting(true);
       const response = await apiService.inventory.assignPricingStrategy(payload);
-      console.log('API response:', response);
+      
       showAlert('Pricing strategy updated successfully!', 'success');
       
       // Optional: Navigate after success with slight delay

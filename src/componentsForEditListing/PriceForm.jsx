@@ -42,12 +42,12 @@ export default function EditPrice() {
   }, []);
 
   useEffect(() => {
-    console.log("AllProducts updated:", product);
-    console.log(`Item id =>  ${ItemId}`);
+    
+    
     if (product[0]) {
       let p = product[0].myPrice.split(" ");
       setOldPrice(p[1]);
-      console.log("new price ", oldPrice);
+      
     }
   }, [product, oldPrice]);
 
@@ -61,7 +61,7 @@ export default function EditPrice() {
       
       navigate("/home");
       modifyProductsArray(null);
-      console.log(newPrice);
+      
     } catch (error) {
       console.error("Error fetching eBay data:", error);
       setError(error.message);

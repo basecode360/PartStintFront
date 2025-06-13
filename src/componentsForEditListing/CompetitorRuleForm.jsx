@@ -148,19 +148,19 @@ export default function CompetitorRuleForm() {
       }
 
       const rulePayload = getCompetitorRulePayload();
-      console.log("Creating competitor rule with payload:", rulePayload);
+      
 
       let response;
       if (formData.assignToActiveListings) {
         response = await apiService.competitorRules.createRuleForAllActive(rulePayload);
         showAlert(`Competitor rule created and assigned to ${response.summary.successfulAssignments} active listings!`, "success");
       } else {
-        console.log("Creating competitor rule without assigning to active listings", rulePayload);
+        
         response = await apiService.competitorRules.createRuleOnProduct(ItemId, rulePayload);
         showAlert("Competitor rule created successfully!", "success");
       }
 
-      console.log("Competitor rule response:", response);
+      
 
       // Navigate back after success
       setTimeout(() => {

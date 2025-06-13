@@ -16,7 +16,7 @@ export default function EntriesAndSearchBar() {
 
 useEffect(() => {
   modifySearch(search)
-  console.log(`search => ${searchProduct}`)
+  
 },[search])
 
   return (

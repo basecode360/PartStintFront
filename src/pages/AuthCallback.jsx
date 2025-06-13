@@ -12,7 +12,7 @@ const AuthCallback = ({ handleAuthCallback }) => {
     const code = params.get('code');
     
     if (code) {
-      console.log("Authorization code received:", code);
+      
       
       // Pass the code to the handleAuthCallback function
       handleAuthCallback(code);

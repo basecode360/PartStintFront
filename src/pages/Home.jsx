@@ -29,7 +29,7 @@ export default function Home({ handleLogout }) {
   // Handle OAuth popup messages
   useEffect(() => {
     const handleMessage = async (event) => {
-      console.log('[Home.jsx] Received postMessage from popup:', event.data);
+      
 
       if (event.origin !== window.location.origin) return;
 
@@ -37,17 +37,14 @@ export default function Home({ handleLogout }) {
 
       if (code && user?.id) {
         try {
-          console.log('[Home.jsx] Sending code to backend for exchange:', {
-            code,
-            userId: user.id,
-          });
+          
 
           const resp = await apiService.auth.exchangeCode({
             code,
             userId: user.id,
           });
 
-          console.log('[Home.jsx] Exchange response from backend:', resp);
+          
 
           if (!resp.success) throw new Error(resp.error || 'Exchange failed');
           localStorage.setItem('userId', user.id);
@@ -114,7 +111,7 @@ export default function Home({ handleLogout }) {
     checkToken();
   }, [user]);
 
-  // 2) Once we have a valid ebayToken, fetch the user’s active listings.
+  // 2) Once we have a valid ebayToken, fetch the user's active listings.
   useEffect(() => {
     if (!ebayToken) {
       return;
@@ -144,20 +141,54 @@ export default function Home({ handleLogout }) {
               );
               setEbayToken(refreshed.data.access_token);
               return; // re-trigger fetchListings on next effect run
+            } else {
+              // Refresh failed, clear tokens and show connect page
+              localStorage.removeItem('ebay_user_token');
+              localStorage.removeItem('ebay_refresh_token');
+              setEbayToken(null);
+              setNeedsConnection(true);
+              return;
             }
           }
           setListingsError(data.error || 'Failed to load listings.');
         }
-        // TODO: store “data” (listings) into local state or a global store.
+        // TODO: store "data" (listings) into local state or a global store.
       } catch (err) {
-        setListingsError(err.message || 'Error loading listings.');
+        console.error('Error fetching listings:', err);
+        // Check if it's a 401 error (token expired)
+        if (err.response?.status === 401 || err.status === 401) {
+          console.warn(
+            '⚠️ eBay token expired (401 error). Clearing tokens and showing connect page.'
+          );
+          localStorage.removeItem('ebay_user_token');
+          localStorage.removeItem('ebay_refresh_token');
+          setEbayToken(null);
+          setNeedsConnection(true);
+          setListingsError(null); // Clear error since we're handling it
+        } else {
+          setListingsError(err.message || 'Error loading listings.');
+        }
       } finally {
         setLoadingListings(false);
       }
     }
 
     fetchListings();
-  }, [ebayToken]);
+  }, [ebayToken, user]);
+
+  // Handle global eBay token expiry events
+  useEffect(() => {
+    const handleTokenExpiry = () => {
+      
+      setEbayToken(null);
+      setNeedsConnection(true);
+      setListingsError(null);
+    };
+
+    window.addEventListener('ebayTokenExpired', handleTokenExpiry);
+    return () =>
+      window.removeEventListener('ebayTokenExpired', handleTokenExpiry);
+  }, []);
 
   // 3) If the user never connected to eBay, show “Connect to eBay” UI.
   if (needsConnection) {
