@@ -205,7 +205,7 @@ export default function Home({ handleLogout }) {
 
   // 3) If the user never connected to eBay, show “Connect to eBay” UI.
   if (needsConnection) {
-    const backendBase = import.meta.env.VITE_BACKEND_URL; // e.g. “http://localhost:5000”
+    const backendBase = import.meta.env.VITE_BACKEND_URL;
 
     const openEbayOAuthPopup = () => {
       if (!user || !user.id) {

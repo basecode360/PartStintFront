@@ -8,7 +8,7 @@
 export default {
   server: {
     proxy: {
-      '/api': 'http://localhost:5000',
+      '/api': 'https://api.17autoparts.com/api',
     },
   },
 };
