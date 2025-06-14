@@ -641,7 +641,7 @@ const combined = {
   },
 };
 
-const BASE_URL = import.meta.env.VITE_API_URL
+const BASE_URL = import.meta.env.VITE_API_URL;
 
 // Helper function to create authenticated requests
 const createAuthenticatedRequest = async () => {
