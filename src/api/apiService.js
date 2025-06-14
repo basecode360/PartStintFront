@@ -65,53 +65,6 @@ competitorClient.interceptors.request.use((config) => {
   return config;
 });
 
-/** ————————————— RESPONSE INTERCEPTORS FOR AUTH ERRORS ————————————— **/
-// Handle 401 errors for pricing strategies
-pricingClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      console.warn(
-        '⚠️ Authentication failed for pricing strategies. Clearing storage and reloading...'
-      );
-
-      // Clear all authentication-related data
-      localStorage.removeItem('user-store');
-      localStorage.removeItem('ebay_user_token');
-      localStorage.removeItem('ebay_refresh_token');
-      localStorage.removeItem('userId');
-      localStorage.removeItem('user_id');
-
-      // Reload the page to redirect to login
-      window.location.reload();
-    }
-    return Promise.reject(error);
-  }
-);
-
-// Handle 401 errors for competitor rules
-competitorClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      console.warn(
-        '⚠️ Authentication failed for competitor rules. Clearing storage and reloading...'
-      );
-
-      // Clear all authentication-related data
-      localStorage.removeItem('user-store');
-      localStorage.removeItem('ebay_user_token');
-      localStorage.removeItem('ebay_refresh_token');
-      localStorage.removeItem('userId');
-      localStorage.removeItem('user_id');
-
-      // Reload the page to redirect to login
-      window.location.reload();
-    }
-    return Promise.reject(error);
-  }
-);
-
 /** ————————————— GLOBAL RESPONSE INTERCEPTOR ————————————— **/
 apiClient.interceptors.response.use(
   (response) => response,
@@ -125,17 +78,6 @@ apiClient.interceptors.response.use(
 
         // Dispatch a custom event to notify components
         window.dispatchEvent(new CustomEvent('ebayTokenExpired'));
-      } else {
-        // General auth failure - clear all and reload
-        console.warn(
-          '⚠️ Authentication failed. Clearing storage and reloading...'
-        );
-        localStorage.removeItem('user-store');
-        localStorage.removeItem('ebay_user_token');
-        localStorage.removeItem('ebay_refresh_token');
-        localStorage.removeItem('userId');
-        localStorage.removeItem('user_id');
-        window.location.reload();
       }
     }
     return Promise.reject(error);
@@ -641,7 +583,7 @@ const combined = {
   },
 };
 
-const BASE_URL = import.meta.env.VITE_API_URL
+const BASE_URL = import.meta.env.VITE_API_URL;
 
 // Helper function to create authenticated requests
 const createAuthenticatedRequest = async () => {

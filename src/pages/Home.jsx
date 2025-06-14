@@ -178,29 +178,9 @@ export default function Home({ handleLogout }) {
       setListingsError(null);
     };
 
-    const handleAuthFailure = () => {
-      console.warn(
-        '⚠️ Authentication failure detected. Clearing storage and reloading...'
-      );
-
-      // Clear all authentication-related data
-      localStorage.removeItem('user-store');
-      localStorage.removeItem('ebay_user_token');
-      localStorage.removeItem('ebay_refresh_token');
-      localStorage.removeItem('userId');
-      localStorage.removeItem('user_id');
-
-      // Reload the page to redirect to login
-      window.location.reload();
-    };
-
     window.addEventListener('ebayTokenExpired', handleTokenExpiry);
-    window.addEventListener('authenticationFailed', handleAuthFailure);
-
-    return () => {
+    return () =>
       window.removeEventListener('ebayTokenExpired', handleTokenExpiry);
-      window.removeEventListener('authenticationFailed', handleAuthFailure);
-    };
   }, []);
 
   // 3) If the user never connected to eBay, show “Connect to eBay” UI.
