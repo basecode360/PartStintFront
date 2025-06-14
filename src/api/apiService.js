@@ -1,7 +1,7 @@
 // src/api/apiService.js
 import axios from 'axios';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL; // e.g. http://localhost:5000
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 const API_KEY = import.meta.env.VITE_X_API_KEY; // (for sync routes)
 
 /** ——————————— AUTH CLIENT ——————————— **/
@@ -641,7 +641,7 @@ const combined = {
   },
 };
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const BASE_URL = import.meta.env.VITE_API_URL
 
 // Helper function to create authenticated requests
 const createAuthenticatedRequest = async () => {
