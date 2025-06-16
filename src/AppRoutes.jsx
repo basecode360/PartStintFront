@@ -9,12 +9,11 @@ import {
 } from 'react-router-dom';
 
 import Login from './pages/Login';
-import PopupCallback from './pages/PopupCallback'; // ← new
+import PopupCallback from './pages/PopupCallback';
 import Home from './pages/Home';
 import EditListing from './pages/EditListing';
 import CompetitorDetails from './componentsForEditListing/CompetitorDetails';
 import PriceStrategy from './pages/PriceStrategy';
-import EditProductPrice from './pages/EditPrice';
 import AddStrategy from './pages/AddStrategy';
 import CompetitorRule from './pages/CompetitorRule';
 import { userStore } from './store/authStore';
@@ -83,13 +82,11 @@ export default function AppRoutes() {
         }
       >
         <Route path="edit-listing" element={<EditListing />} />
-        <Route path="edit-price" element={<EditProductPrice />} />
         <Route path="update-strategy/:productId" element={<PriceStrategy />} />
         <Route path="competitors/:itemId" element={<CompetitorDetails />} />
         <Route path="add-strategy" element={<AddStrategy />} />
         <Route path="add-competitor-rule" element={<CompetitorRule />} />
       </Route>
-      {/* (You can also add a catch‐all 404 route if desired) */}
     </Routes>
   );
 }

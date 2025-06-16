@@ -8,6 +8,7 @@ export default function ListingsHeading() {
         <Typography
           variant="h4" // Larger font size for improved readability
           sx={{
+            padding: '50px 0', // More padding for better spacing
             fontWeight: 700, // Bold font for stronger visual presence
             fontFamily: `'Roboto', sans-serif`, // Clean, modern font
             fontSize: '29px', // Slightly larger font size
@@ -17,7 +18,8 @@ export default function ListingsHeading() {
             transition: 'color 0.3s ease-in-out', // Smooth color transition on hover
           }}
         >
-          View Active Listings - Set Min/Max Prices, Strategies & Competitors Individually
+          View Active Listings - Set Min/Max Prices, Strategies & Competitors
+          Individually
         </Typography>
       </>
     </Container>

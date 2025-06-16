@@ -1,15 +1,30 @@
 import React from 'react';
 import { Box, Button } from '@mui/material';
 
-export default function PaginationBar({ currentPage = 1, totalPages = 4, onPageChange }) {
+export default function PaginationBar({
+  currentPage = 1,
+  totalPages = 4,
+  onPageChange,
+}) {
   const handleChange = (page) => {
     if (page >= 1 && page <= totalPages && page !== currentPage) {
       onPageChange(page);
     }
   };
 
+  // Don't render pagination if there's only one page or no pages
+  if (totalPages <= 1) {
+    return null;
+  }
+
   return (
-    <Box display="flex" justifyContent="center" alignItems="center" gap={2} sx={{ py: 3 }}>
+    <Box
+      display="flex"
+      justifyContent="center"
+      alignItems="center"
+      gap={2}
+      sx={{ py: 3, pb: 10 }}
+    >
       <Button
         variant="outlined"
         onClick={() => handleChange(currentPage - 1)}
@@ -29,31 +44,30 @@ export default function PaginationBar({ currentPage = 1, totalPages = 4, onPageC
       </Button>
 
       {[...Array(totalPages)].map((_, idx) => {
-  const page = idx + 1;
-  return (
-    <Button
-      key={page}
-      variant={page === currentPage ? 'contained' : 'outlined'}
-      color={page === currentPage ? 'primary' : 'inherit'} // Blue for active page
-      onClick={() => handleChange(page)}
-      sx={{
-        minWidth: 40,
-        fontWeight: page === currentPage ? 600 : 400,
-        textTransform: 'none',
-        borderRadius: 20,
-        fontSize: '16px', // Increase font size for better readability
-        '&:hover': {
-          backgroundColor: page === currentPage ? '#1976d2' : '#E3F2FD', // Lighter blue for hover effect
-        },
-        borderColor: page === currentPage ? '#1976d2' : '#ddd', // Active page has blue border
-        color: page === currentPage ? '#fff' : '#1976d2', // Active page text color
-      }}
-    >
-      {page}
-    </Button>
-  );
-})}
-
+        const page = idx + 1;
+        return (
+          <Button
+            key={page}
+            variant={page === currentPage ? 'contained' : 'outlined'}
+            color={page === currentPage ? 'primary' : 'inherit'} // Blue for active page
+            onClick={() => handleChange(page)}
+            sx={{
+              minWidth: 40,
+              fontWeight: page === currentPage ? 600 : 400,
+              textTransform: 'none',
+              borderRadius: 20,
+              fontSize: '16px', // Increase font size for better readability
+              '&:hover': {
+                backgroundColor: page === currentPage ? '#1976d2' : '#E3F2FD', // Lighter blue for hover effect
+              },
+              borderColor: page === currentPage ? '#1976d2' : '#ddd', // Active page has blue border
+              color: page === currentPage ? '#fff' : '#1976d2', // Active page text color
+            }}
+          >
+            {page}
+          </Button>
+        );
+      })}
 
       <Button
         variant="outlined"
@@ -66,7 +80,8 @@ export default function PaginationBar({ currentPage = 1, totalPages = 4, onPageC
           borderRadius: 20,
           color: currentPage === totalPages ? '#bdbdbd' : '#1976d2',
           '&:hover': {
-            backgroundColor: currentPage === totalPages ? 'transparent' : '#e3f2fd',
+            backgroundColor:
+              currentPage === totalPages ? 'transparent' : '#e3f2fd',
           },
         }}
       >

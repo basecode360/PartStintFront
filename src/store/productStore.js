@@ -1,18 +1,39 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
-
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export const useProductStore = create(
   persist(
-    (set) => ({
-      ItemId: "",
+    (set, get) => ({
+      ItemId: '',
       AllProducts: [],
+      filteredProducts: [],
       productObj: {},
-      sku: "",
-      searchProduct: "",
+      sku: '',
+      searchProduct: '',
+      entriesLimit: 5,
       competitors: [],
       modifyCompetitors: (competitors) => set({ competitors }),
       modifySearch: (searchProduct) => set({ searchProduct }),
+      setEntriesLimit: (entriesLimit) => set({ entriesLimit }),
+      performSearch: ({ search, limit }) => {
+        const { AllProducts } = get();
+        let filtered = AllProducts;
+
+        if (search) {
+          filtered = AllProducts.filter(
+            (product) =>
+              product.name?.toLowerCase().includes(search.toLowerCase()) ||
+              product.id?.toString().includes(search) ||
+              product.productId?.toString().includes(search)
+          );
+        }
+
+        if (limit) {
+          filtered = filtered.slice(0, limit);
+        }
+
+        set({ filteredProducts: filtered });
+      },
       modifyProductsObj: (productObj) => set({ productObj }),
       modifyProductsArray: (AllProducts) => set({ AllProducts }),
       modifyProductsId: (ItemId) => set({ ItemId }),
@@ -20,5 +41,6 @@ export const useProductStore = create(
     }),
     {
       name: 'product-store',
-      }),
+    }
   )
+);

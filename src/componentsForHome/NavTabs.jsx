@@ -3,10 +3,7 @@ import { Box, Typography, Menu, MenuItem, IconButton } from '@mui/material';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import { useNavigate } from 'react-router-dom';
 
-const tabs = [
-  { label: 'Listings', hasDropdown: false, route: '/' },
-  { label: 'CSV', hasDropdown: false},
-];
+const tabs = [{ label: 'Listings', hasDropdown: false, route: '/' }];
 
 export default function NavTabs({ activeTab = 'Listings' }) {
   const [anchorEl, setAnchorEl] = React.useState(null);
@@ -52,7 +49,7 @@ export default function NavTabs({ activeTab = 'Listings' }) {
               cursor: 'pointer',
               padding: '0 15px', // Add padding between each tab
               borderRadius: 2, // Rounded corners for each tab
-              "&:hover": {
+              '&:hover': {
                 backgroundColor: '#f5f5f5', // Light hover effect
               },
             }}
@@ -79,7 +76,7 @@ export default function NavTabs({ activeTab = 'Listings' }) {
                   padding: 0,
                   ml: 1,
                   transition: 'color 0.3s ease-in-out', // Smooth transition for icon color
-                  "&:hover": { color: '#1976d2' },
+                  '&:hover': { color: '#1976d2' },
                 }}
               >
                 <ArrowDropDownIcon />
@@ -90,7 +87,11 @@ export default function NavTabs({ activeTab = 'Listings' }) {
       })}
 
       {/* Dropdown Menu for Active Tabs */}
-      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+      >
         <MenuItem onClick={handleMenuClose}>{menuTab} Option 1</MenuItem>
         <MenuItem onClick={handleMenuClose}>{menuTab} Option 2</MenuItem>
       </Menu>

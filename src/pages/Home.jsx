@@ -7,7 +7,6 @@ import { userStore } from '../store/authStore';
 
 import Header from '../componentsForHome/Header';
 import NavTabs from '../componentsForHome/NavTabs';
-import ActionButtons from '../componentsForHome/ActionButtons';
 import ListingsHeading from '../componentsForHome/ListingsHeading';
 import EntriesAndSearchBar from '../componentsForHome/EntriesAndSearchBar';
 import ListingsTable from '../componentsForHome/ListingsTable';
@@ -17,6 +16,8 @@ import ScrollToTopButton from '../componentsForHome/ScrollToTopButton';
 
 export default function Home({ handleLogout }) {
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [itemsPerPage] = useState(10); // You can make this configurable later
   const [ebayToken, setEbayToken] = useState(null);
   const [needsConnection, setNeedsConnection] = useState(false);
   const [loadingListings, setLoadingListings] = useState(false);
@@ -261,17 +262,25 @@ export default function Home({ handleLogout }) {
   // 4) Normal dashboard rendering once we have “ebayToken”
   const isDashboard = location.pathname === '/home';
 
+  // Reset to page 1 when switching views or reloading data
+  const handleTotalPagesChange = (newTotalPages) => {
+    setTotalPages(newTotalPages);
+    // If current page is beyond new total pages, reset to page 1
+    if (page > newTotalPages) {
+      setPage(1);
+    }
+  };
+
   return (
     <>
       <Header handleLogout={handleLogout} />
-      <NavTabs />
+      {/* <NavTabs /> */}
 
       {/* If you have nested routes under /home, render them here: */}
       <Outlet />
 
       {isDashboard && (
         <>
-          <ActionButtons />
           <ListingsHeading />
 
           {loadingListings ? (
@@ -285,10 +294,14 @@ export default function Home({ handleLogout }) {
           ) : (
             <>
               <EntriesAndSearchBar />
-              <ListingsTable />
+              <ListingsTable
+                currentPage={page}
+                itemsPerPage={itemsPerPage}
+                onTotalPagesChange={handleTotalPagesChange}
+              />
               <PaginationBar
                 currentPage={page}
-                totalPages={4}
+                totalPages={totalPages}
                 onPageChange={setPage}
               />
             </>

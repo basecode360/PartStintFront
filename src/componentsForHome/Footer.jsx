@@ -6,13 +6,17 @@ export default function Footer() {
     <Box
       component="footer"
       sx={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        width: '100%',
         backgroundColor: '#2E3B4E',
         py: 2,
         px: 4,
         color: '#fff',
         fontSize: 14,
         textAlign: 'left',
-        mt: 4
+        zIndex: 1000
       }}
     >
       <Typography variant="body2">

@@ -37,12 +37,17 @@ import { useProductStore } from '../store/productStore';
 // Import your API service
 import apiService from '../api/apiService';
 
-export default function ListingsTable() {
+export default function ListingsTable({
+  currentPage = 1,
+  itemsPerPage = 10,
+  onTotalPagesChange,
+}) {
   const navigate = useNavigate();
   const location = useLocation();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [paginatedRows, setPaginatedRows] = useState([]);
   const {
     modifyProductsArray,
     modifyProductsId,
@@ -55,7 +60,6 @@ export default function ListingsTable() {
 
   // Fetch data from eBay when component mounts
   useEffect(() => {
-   
     fetchEbayListings();
   }, []); // Only run once on mount
 
@@ -77,6 +81,20 @@ export default function ListingsTable() {
     setRows(filtered);
   }, [searchProduct, AllProducts]);
 
+  // Calculate pagination
+  useEffect(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginated = rows.slice(startIndex, endIndex);
+    setPaginatedRows(paginated);
+
+    // Calculate total pages and notify parent
+    const totalPages = Math.ceil(rows.length / itemsPerPage);
+    if (onTotalPagesChange) {
+      onTotalPagesChange(totalPages);
+    }
+  }, [rows, currentPage, itemsPerPage, onTotalPagesChange]);
+
   const fetchEbayListings = async () => {
     try {
       setLoading(true);
@@ -95,7 +113,7 @@ export default function ListingsTable() {
             ebayListings = [itemArray.Item];
           }
         }
-        
+
         const formattedListings = await Promise.all(
           ebayListings.map(async (item, index) => {
             const itemID = item.ItemID;
@@ -103,9 +121,11 @@ export default function ListingsTable() {
             try {
               const [competitorRes, strategyDisplayRes] = await Promise.all([
                 apiService.inventory.getCompetitorPrice(itemID),
-                apiService.pricingStrategies.getStrategyDisplayForProduct(itemID),
+                apiService.pricingStrategies.getStrategyDisplayForProduct(
+                  itemID
+                ),
               ]);
-              
+
               const { price, count } = competitorRes;
               const strategyDisplay = strategyDisplayRes?.data || {
                 strategy: 'Assign Strategy',
@@ -125,7 +145,9 @@ export default function ListingsTable() {
                 ],
                 price: `USD ${parseFloat(item.BuyItNowPrice || 0).toFixed(2)}`,
                 qty: parseInt(item.Quantity || '0', 10),
-                myPrice: `USD ${parseFloat(item.BuyItNowPrice || 0).toFixed(2)}`,
+                myPrice: `USD ${parseFloat(item.BuyItNowPrice || 0).toFixed(
+                  2
+                )}`,
                 competition: price,
                 strategy: strategyDisplay.strategy,
                 minPrice: strategyDisplay.minPrice,
@@ -135,7 +157,9 @@ export default function ListingsTable() {
               };
             } catch (error) {
               console.error(
-                `❌ [${index + 1}/${ebayListings.length}] Error fetching data for ${itemID}:`,
+                `❌ [${index + 1}/${
+                  ebayListings.length
+                }] Error fetching data for ${itemID}:`,
                 error
               );
               return {
@@ -149,7 +173,9 @@ export default function ListingsTable() {
                 ],
                 price: `USD ${parseFloat(item.BuyItNowPrice || 0).toFixed(2)}`,
                 qty: parseInt(item.Quantity || '0', 10),
-                myPrice: `USD ${parseFloat(item.BuyItNowPrice || 0).toFixed(2)}`,
+                myPrice: `USD ${parseFloat(item.BuyItNowPrice || 0).toFixed(
+                  2
+                )}`,
                 competition: 'Error',
                 strategy: 'Assign Strategy',
                 minPrice: 'Set',
@@ -160,7 +186,7 @@ export default function ListingsTable() {
             }
           })
         );
-        
+
         const validListings = formattedListings.filter(Boolean);
         if (validListings.length > 0) {
           setRows(validListings);
@@ -221,8 +247,6 @@ export default function ListingsTable() {
               await apiService.pricingStrategies.getStrategyDisplayForProduct(
                 product.productId
               );
-
-           
 
             const strategyDisplay = strategyDisplayRes?.data || {
               strategy: 'Assign Strategy',
@@ -304,8 +328,6 @@ export default function ListingsTable() {
 
         // If update was within last 30 seconds, refresh
         if (now - updateTime < 30000) {
-          
-
           // Clear all storage flags first
           localStorage.removeItem('strategyUpdated');
           localStorage.removeItem('priceUpdated');
@@ -351,7 +373,9 @@ export default function ListingsTable() {
   }
 
   return (
-    <Container sx={{ mt: 4, mb: 2 }}>
+    <Container sx={{ mt: 4, mb: 2, pb: 10 }}>
+      {' '}
+      {/* Add bottom padding for footer */}
       <Box
         sx={{
           display: 'flex',
@@ -364,8 +388,10 @@ export default function ListingsTable() {
           Active Listings - Strategy Managed
         </Typography>
       </Box>
-
-      <TableContainer component={Paper} sx={{ borderRadius: 2, border: '1px solid #ddd' }}>
+      <TableContainer
+        component={Paper}
+        sx={{ borderRadius: 2, border: '1px solid #ddd' }}
+      >
         <Table sx={{ minWidth: 650 }}>
           <TableHead>
             <TableRow
@@ -416,7 +442,7 @@ export default function ListingsTable() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {AllProducts.map((row, idx) => (
+            {paginatedRows.map((row, idx) => (
               <TableRow
                 key={idx}
                 sx={{
@@ -437,7 +463,9 @@ export default function ListingsTable() {
                 >
                   <Box>
                     <Link
-                      href="#"
+                      href={`https://www.ebay.com/itm/${row.productId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       underline="hover"
                       color="primary"
                       fontSize={16}
@@ -468,7 +496,7 @@ export default function ListingsTable() {
                     </Typography>
                   </Box>
                 </TableCell>
-                
+
                 <TableCell
                   sx={{
                     border: '1px solid #ddd',
@@ -478,7 +506,7 @@ export default function ListingsTable() {
                 >
                   {row.qty}
                 </TableCell>
-                
+
                 <TableCell
                   sx={{
                     border: '1px solid #ddd',
@@ -512,7 +540,7 @@ export default function ListingsTable() {
                     Assign Rule
                   </Typography>
                 </TableCell>
-                
+
                 <TableCell
                   sx={{
                     border: '1px solid #ddd',
@@ -522,7 +550,7 @@ export default function ListingsTable() {
                 >
                   {row.competition}
                 </TableCell>
-                
+
                 <TableCell
                   sx={{
                     border: '1px solid #ddd',
@@ -576,7 +604,7 @@ export default function ListingsTable() {
                     {row.minPrice}
                   </Typography>
                 </TableCell>
-                
+
                 <TableCell
                   sx={{
                     border: '1px solid #ddd',
@@ -600,7 +628,7 @@ export default function ListingsTable() {
                     {row.maxPrice}
                   </Typography>
                 </TableCell>
-                
+
                 <TableCell
                   sx={{
                     border: '1px solid #ddd',
