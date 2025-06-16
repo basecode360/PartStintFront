@@ -30,40 +30,77 @@ export default function Home({ handleLogout }) {
   // Handle OAuth popup messages
   useEffect(() => {
     const handleMessage = async (event) => {
-      if (event.origin !== window.location.origin) return;
+  
 
-      const { code, state, expires_in } = event.data;
+      // For production, allow messages from the same origin
+      if (
+        event.origin !== window.location.origin &&
+        event.origin !== 'https://17autoparts.com'
+      ) {
+        console.warn('⚠️ Message from unexpected origin, ignoring');
+        return;
+      }
+
+      const { code, state, error } = event.data;
+
+      if (error) {
+        console.error('❌ OAuth error from popup:', error);
+        alert('eBay authorization failed: ' + error);
+        return;
+      }
 
       if (code && user?.id) {
         try {
+         
+
           const resp = await apiService.auth.exchangeCode({
             code,
             userId: user.id,
           });
 
-          if (!resp.success) throw new Error(resp.error || 'Exchange failed');
-          localStorage.setItem('userId', user.id);
+
+          if (!resp.success) {
+            console.error('❌ Exchange failed:', resp.error);
+            alert('Failed to exchange authorization code: ' + resp.error);
+            throw new Error(resp.error || 'Exchange failed');
+          }
+
 
           const expiresIn = resp.data.expires_in || 7200; // fallback to 2h
           const expiresAt = Date.now() + expiresIn * 1000;
 
-          localStorage.setItem(
-            'ebay_user_token',
-            JSON.stringify({
-              value: resp.data.access_token,
-              expiry: expiresAt,
-            })
-          );
+          // Store token with expiry info
+          const tokenData = {
+            value: resp.data.access_token,
+            expiry: expiresAt,
+          };
+
+          localStorage.setItem('ebay_user_token', JSON.stringify(tokenData));
+          localStorage.setItem('userId', user.id);
 
           if (resp.data.refresh_token) {
             localStorage.setItem('ebay_refresh_token', resp.data.refresh_token);
           }
 
+
           setEbayToken(resp.data.access_token);
           setNeedsConnection(false);
+
+          // Close the popup window if it exists
+          if (popupRef.current && !popupRef.current.closed) {
+            popupRef.current.close();
+          }
+
+          alert('✅ Successfully connected to eBay!');
         } catch (err) {
           console.error('❌ Error exchanging code:', err);
+          alert('Error connecting to eBay: ' + err.message);
         }
+      } else {
+        console.warn('⚠️ No code or user ID in message:', {
+          hasCode: !!code,
+          userId: user?.id,
+        });
       }
     };
 
@@ -78,28 +115,40 @@ export default function Home({ handleLogout }) {
       if (!user || !user.id) return;
 
       // 1. Try localStorage first
-      const localToken = localStorage.getItem('ebay_user_token');
-      if (localToken) {
-        setEbayToken(localToken); // use it
-        setNeedsConnection(false); // hide "connect" button
+      const localTokenStr = localStorage.getItem('ebay_user_token');
+      if (localTokenStr) {
+        try {
+          const localTokenData = JSON.parse(localTokenStr);
+          if (localTokenData.expiry > Date.now()) {
+            setEbayToken(localTokenData.value);
+            setNeedsConnection(false);
+            return;
+          } else {
+            localStorage.removeItem('ebay_user_token');
+          }
+        } catch (err) {
+          console.warn('⚠️ Invalid token data in localStorage, removing...');
+          localStorage.removeItem('ebay_user_token');
+        }
       }
 
-      // 2. Still validate via backend in case token is expired
+      // 2. Try to get/refresh token from backend
       try {
         const token = await getValidAuthToken(user.id);
         if (token) {
-          localStorage.setItem('ebay_user_token', token);
+          const tokenData = {
+            value: token,
+            expiry: Date.now() + 7200 * 1000, // 2 hours default
+          };
+          localStorage.setItem('ebay_user_token', JSON.stringify(tokenData));
           setEbayToken(token);
           setNeedsConnection(false);
-        } else if (!localToken) {
-          // If no local token either
+        } else {
           setNeedsConnection(true);
         }
       } catch (err) {
-        if (!localToken) {
-          setNeedsConnection(true);
-        }
         console.warn('⚠️ Unable to fetch/refresh eBay token:', err);
+        setNeedsConnection(true);
       }
     }
 
@@ -206,13 +255,19 @@ export default function Home({ handleLogout }) {
 
   // 3) If the user never connected to eBay, show “Connect to eBay” UI.
   if (needsConnection) {
-    const backendBase = import.meta.env.VITE_BACKEND_URL;
+    const backendBase = import.meta.env.VITE_BACKEND_URL; // e.g. “http://localhost:5000”
 
     const openEbayOAuthPopup = () => {
       if (!user || !user.id) {
         console.error('No user ID available – cannot start eBay OAuth.');
+        alert('No user ID available. Please log in again.');
         return;
       }
+
+
+      // Get the backend URL from environment or use current domain
+      const backendBase =
+        import.meta.env.VITE_BACKEND_URL || window.location.origin;
 
       // 3a) Open a small popup centered on the screen:
       const width = 600;
@@ -221,11 +276,31 @@ export default function Home({ handleLogout }) {
       const top = window.screenY + (window.innerHeight - height) / 2;
 
       const authUrl = `${backendBase}/auth/ebay-login?userId=${user.id}`;
-      window.open(
+
+      const popup = window.open(
         authUrl,
-        '_blank',
-        `width=${width},height=${height},top=${top},left=${left}`
+        'ebayAuth',
+        `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`
       );
+
+      if (!popup) {
+        console.error('❌ Failed to open popup - might be blocked');
+        alert(
+          'Popup was blocked. Please allow popups for this site and try again.'
+        );
+        return;
+      }
+
+      // Store reference to popup
+      popupRef.current = popup;
+
+
+      // Optional: Monitor popup closure
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+        }
+      }, 1000);
     };
 
     return (
@@ -259,6 +334,33 @@ export default function Home({ handleLogout }) {
     );
   }
 
+  // Handle eBay account logout
+  const handleEbayLogout = async () => {
+    if (!user?.id) return;
+
+    try {
+      const response = await apiService.auth.ebayLogout(user.id);
+
+      if (response.success) {
+        // Clear eBay tokens from localStorage
+        localStorage.removeItem('ebay_user_token');
+        localStorage.removeItem('ebay_refresh_token');
+
+        // Update component state
+        setEbayToken(null);
+        setNeedsConnection(true);
+        setListingsError(null);
+
+      } else {
+        console.error('Failed to logout from eBay:', response.error);
+        setListingsError('Failed to disconnect eBay account');
+      }
+    } catch (error) {
+      console.error('Error during eBay logout:', error);
+      setListingsError('Error disconnecting eBay account');
+    }
+  };
+
   // 4) Normal dashboard rendering once we have “ebayToken”
   const isDashboard = location.pathname === '/home';
 
@@ -273,7 +375,7 @@ export default function Home({ handleLogout }) {
 
   return (
     <>
-      <Header handleLogout={handleLogout} />
+      <Header handleLogout={handleLogout} handleEbayLogout={handleEbayLogout} />
       {/* <NavTabs /> */}
 
       {/* If you have nested routes under /home, render them here: */}

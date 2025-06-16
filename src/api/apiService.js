@@ -228,7 +228,10 @@ const auth = {
       const resp = await authClient.post('/register', credentials);
       return resp.data;
     } catch (err) {
-      return { success: false, error: err.message };
+      return {
+        success: false,
+        error: err.response?.data?.message || err.message,
+      };
     }
   },
   login: async (credentials) => {
@@ -236,15 +239,26 @@ const auth = {
       const resp = await authClient.post('/login', credentials);
       return resp.data;
     } catch (err) {
-      return { success: false, error: err.message };
+      return {
+        success: false,
+        error: err.response?.data?.message || err.message,
+      };
     }
   },
   exchangeCode: async ({ code, userId }) => {
     try {
+      
       const resp = await authClient.post('/exchange-code', { code, userId });
       return resp.data;
     } catch (err) {
-      return { success: false, error: err.message };
+      console.error(
+        '📡 Exchange-code error:',
+        err.response?.data || err.message
+      );
+      return {
+        success: false,
+        error: err.response?.data?.message || err.message,
+      };
     }
   },
   getEbayUserToken: async (userId) => {
@@ -252,7 +266,11 @@ const auth = {
       const resp = await authClient.get('/token', { params: { userId } });
       return resp.data;
     } catch (err) {
-      return { success: false, error: err.message };
+      console.error('📡 Get token error:', err.response?.data || err.message);
+      return {
+        success: false,
+        error: err.response?.data?.message || err.message,
+      };
     }
   },
   refreshEbayUserToken: async (userId) => {
@@ -260,7 +278,25 @@ const auth = {
       const resp = await authClient.get('/refresh', { params: { userId } });
       return resp.data;
     } catch (err) {
-      return { success: false, error: err.message };
+      console.error(
+        '📡 Refresh token error:',
+        err.response?.data || err.message
+      );
+      return {
+        success: false,
+        error: err.response?.data?.message || err.message,
+      };
+    }
+  },
+  ebayLogout: async (userId) => {
+    try {
+      const resp = await authClient.post('/ebay-logout', { userId });
+      return resp.data;
+    } catch (err) {
+      return {
+        success: false,
+        error: err.response?.data?.message || err.message,
+      };
     }
   },
 };
@@ -641,7 +677,7 @@ const combined = {
   },
 };
 
-const BASE_URL = import.meta.env.VITE_API_URL;
+const BASE_URL = import.meta.env.VITE_API_URL
 
 // Helper function to create authenticated requests
 const createAuthenticatedRequest = async () => {

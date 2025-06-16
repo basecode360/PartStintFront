@@ -69,11 +69,33 @@ export default function Login({ handleLogin }) {
         handleLogin();
         navigate('/home');
       } else {
-        setError(response.error || 'Invalid email or password');
+        // Handle authentication errors specifically
+        if (response.status === 401 || response.status === 403) {
+          setError('Invalid email or password');
+        } else {
+          setError(response.error || 'Invalid email or password');
+        }
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError('Something went wrong during login.');
+      
+      // Check if it's a network/HTTP error
+      if (err.response) {
+        // Server responded with error status
+        if (err.response.status === 401 || err.response.status === 403) {
+          setError('Invalid email or password');
+        } else if (err.response.status >= 500) {
+          setError('Server error. Please try again later.');
+        } else {
+          setError('Invalid email or password');
+        }
+      } else if (err.request) {
+        // Network error
+        setError('Network error. Please check your connection.');
+      } else {
+        // Other errors
+        setError('Invalid email or password');
+      }
     }
   };
 
