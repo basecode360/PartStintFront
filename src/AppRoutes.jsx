@@ -13,6 +13,7 @@ import PopupCallback from './pages/PopupCallback';
 import Home from './pages/Home';
 import EditListing from './pages/EditListing';
 import CompetitorDetails from './componentsForEditListing/CompetitorDetails';
+import AddCompetitorManually from './componentsForEditListing/AddCompetitorManually';
 import PriceStrategy from './pages/PriceStrategy';
 import AddStrategy from './pages/AddStrategy';
 import CompetitorRule from './pages/CompetitorRule';
@@ -84,6 +85,7 @@ export default function AppRoutes() {
         <Route path="edit-listing" element={<EditListing />} />
         <Route path="update-strategy/:productId" element={<PriceStrategy />} />
         <Route path="competitors/:itemId" element={<CompetitorDetails />} />
+        <Route path="add-competitor-manually/:itemId" element={<AddCompetitorManually />} />
         <Route path="add-strategy" element={<AddStrategy />} />
         <Route path="add-competitor-rule" element={<CompetitorRule />} />
       </Route>

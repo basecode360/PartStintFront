@@ -219,6 +219,101 @@ const inventory = {
       return { price: 'USD0.00', count: 0, allPrices: [], productInfo: [] };
     }
   },
+  getManuallyAddedCompetitors: async (itemId) => {
+    try {
+      const userId = localStorage.getItem('user_id');
+
+      if (!userId) {
+        return { success: false, error: 'User ID not found' };
+      }
+
+      const resp = await competitorClient.get(
+        `/get-manual-competitors/${itemId}`,
+        {
+          params: { userId },
+        }
+      );
+
+      return resp.data;
+    } catch (err) {
+      return {
+        success: false,
+        error: err.response?.data?.message || err.message,
+        competitors: [],
+      };
+    }
+  },
+  searchCompetitorsManually: async (itemId, competitorItemIds) => {
+    try {
+      const userId = localStorage.getItem('user_id');
+
+      if (!userId) {
+        return { success: false, error: 'User ID not found' };
+      }
+
+      const resp = await competitorClient.post(
+        `/search-competitors-manually/${itemId}`,
+        {
+          userId,
+          competitorItemIds,
+        }
+      );
+
+      return resp.data;
+    } catch (err) {
+      return {
+        success: false,
+        error: err.response?.data?.message || err.message,
+      };
+    }
+  },
+  addCompetitorsManually: async (itemId, competitorItemIds) => {
+    try {
+      const userId = localStorage.getItem('user_id');
+
+      if (!userId) {
+        return { success: false, error: 'User ID not found' };
+      }
+
+      const resp = await competitorClient.post(
+        `/add-competitors-manually/${itemId}`,
+        {
+          userId,
+          competitorItemIds,
+        }
+      );
+
+      return resp.data;
+    } catch (err) {
+      return {
+        success: false,
+        error: err.response?.data?.message || err.message,
+      };
+    }
+  },
+  removeManualCompetitor: async (itemId, competitorItemId) => {
+    try {
+      const userId = localStorage.getItem('user_id');
+
+      if (!userId) {
+        return { success: false, error: 'User ID not found' };
+      }
+
+      const resp = await competitorClient.delete(
+        `/remove-manual-competitor/${itemId}/${competitorItemId}`,
+        {
+          params: { userId },
+        }
+      );
+
+      return resp.data;
+    } catch (err) {
+      return {
+        success: false,
+        error: err.response?.data?.message || err.message,
+      };
+    }
+  },
 };
 
 /** ————————————— AUTH (LOGIN / REGISTER / EXCHANGE CODE / GET TOKEN) ————————————— **/
@@ -247,7 +342,6 @@ const auth = {
   },
   exchangeCode: async ({ code, userId }) => {
     try {
-      
       const resp = await authClient.post('/exchange-code', { code, userId });
       return resp.data;
     } catch (err) {

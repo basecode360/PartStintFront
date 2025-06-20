@@ -96,11 +96,6 @@ export default function Home({ handleLogout }) {
           console.error('❌ Error exchanging code:', err);
           alert('Error connecting to eBay: ' + err.message);
         }
-      } else {
-        console.warn('⚠️ No code or user ID in message:', {
-          hasCode: !!code,
-          userId: user?.id,
-        });
       }
     };
 
