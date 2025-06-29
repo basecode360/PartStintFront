@@ -13,6 +13,7 @@ import ListingsTable from '../componentsForHome/ListingsTable';
 import PaginationBar from '../componentsForHome/PaginationBar';
 import Footer from '../componentsForHome/Footer';
 import ScrollToTopButton from '../componentsForHome/ScrollToTopButton';
+import AssignCompetitorRule from '../componentsForHome/AssignCompetitorRule';
 
 export default function Home({ handleLogout }) {
   const [page, setPage] = useState(1);
@@ -30,8 +31,6 @@ export default function Home({ handleLogout }) {
   // Handle OAuth popup messages
   useEffect(() => {
     const handleMessage = async (event) => {
-  
-
       // For production, allow messages from the same origin
       if (
         event.origin !== window.location.origin &&
@@ -51,20 +50,16 @@ export default function Home({ handleLogout }) {
 
       if (code && user?.id) {
         try {
-         
-
           const resp = await apiService.auth.exchangeCode({
             code,
             userId: user.id,
           });
-
 
           if (!resp.success) {
             console.error('❌ Exchange failed:', resp.error);
             alert('Failed to exchange authorization code: ' + resp.error);
             throw new Error(resp.error || 'Exchange failed');
           }
-
 
           const expiresIn = resp.data.expires_in || 7200; // fallback to 2h
           const expiresAt = Date.now() + expiresIn * 1000;
@@ -81,7 +76,6 @@ export default function Home({ handleLogout }) {
           if (resp.data.refresh_token) {
             localStorage.setItem('ebay_refresh_token', resp.data.refresh_token);
           }
-
 
           setEbayToken(resp.data.access_token);
           setNeedsConnection(false);
@@ -218,6 +212,7 @@ export default function Home({ handleLogout }) {
   // Handle global eBay token expiry events
   useEffect(() => {
     const handleTokenExpiry = () => {
+      console.warn('eBay token expired event received');
       setEbayToken(null);
       setNeedsConnection(true);
       setListingsError(null);
@@ -248,17 +243,14 @@ export default function Home({ handleLogout }) {
     };
   }, []);
 
-  // 3) If the user never connected to eBay, show “Connect to eBay” UI.
+  // 3) If the user never connected to eBay, show "Connect to eBay" UI.
   if (needsConnection) {
-    const backendBase = import.meta.env.VITE_BACKEND_URL; // e.g. “http://localhost:5000”
-
     const openEbayOAuthPopup = () => {
       if (!user || !user.id) {
         console.error('No user ID available – cannot start eBay OAuth.');
         alert('No user ID available. Please log in again.');
         return;
       }
-
 
       // Get the backend URL from environment or use current domain
       const backendBase =
@@ -289,7 +281,6 @@ export default function Home({ handleLogout }) {
       // Store reference to popup
       popupRef.current = popup;
 
-
       // Optional: Monitor popup closure
       const checkClosed = setInterval(() => {
         if (popup.closed) {
@@ -310,7 +301,11 @@ export default function Home({ handleLogout }) {
           textAlign: 'center',
         }}
       >
-        <h2>You need to connect your eBay account</h2>
+        <h2>eBay Token Expired</h2>
+        <p style={{ marginBottom: '2rem', color: '#666' }}>
+          Your eBay authorization has expired. Please reconnect your eBay
+          account to continue.
+        </p>
         <button
           onClick={openEbayOAuthPopup}
           style={{
@@ -321,9 +316,27 @@ export default function Home({ handleLogout }) {
             borderRadius: '4px',
             fontSize: '1rem',
             cursor: 'pointer',
+            marginBottom: '1rem',
           }}
         >
-          Connect to eBay
+          Reconnect to eBay
+        </button>
+        <button
+          onClick={() => {
+            setNeedsConnection(false);
+            setEbayToken('dummy'); // This will trigger a refresh attempt
+          }}
+          style={{
+            padding: '0.5rem 1rem',
+            backgroundColor: 'transparent',
+            color: '#666',
+            border: '1px solid #ccc',
+            borderRadius: '4px',
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+          }}
+        >
+          Try Again
         </button>
       </div>
     );
@@ -345,7 +358,6 @@ export default function Home({ handleLogout }) {
         setEbayToken(null);
         setNeedsConnection(true);
         setListingsError(null);
-
       } else {
         console.error('Failed to logout from eBay:', response.error);
         setListingsError('Failed to disconnect eBay account');
@@ -356,8 +368,10 @@ export default function Home({ handleLogout }) {
     }
   };
 
-  // 4) Normal dashboard rendering once we have “ebayToken”
+  // 4) Normal dashboard rendering once we have "ebayToken"
   const isDashboard = location.pathname === '/home';
+  const isCompetitors = location.pathname === '/home/competitors';
+  const isPricingStrategies = location.pathname === '/home/pricing-strategies';
 
   // Reset to page 1 when switching views or reloading data
   const handleTotalPagesChange = (newTotalPages) => {
@@ -371,7 +385,7 @@ export default function Home({ handleLogout }) {
   return (
     <>
       <Header handleLogout={handleLogout} handleEbayLogout={handleEbayLogout} />
-      {/* <NavTabs /> */}
+      <NavTabs />
 
       {/* If you have nested routes under /home, render them here: */}
       <Outlet />
@@ -379,7 +393,6 @@ export default function Home({ handleLogout }) {
       {isDashboard && (
         <>
           <ListingsHeading />
-
           {loadingListings ? (
             <p style={{ textAlign: 'center', marginTop: '2rem' }}>
               Loading your eBay listings…⏳
@@ -395,6 +408,7 @@ export default function Home({ handleLogout }) {
                 currentPage={page}
                 itemsPerPage={itemsPerPage}
                 onTotalPagesChange={handleTotalPagesChange}
+                mode="listings"
               />
               <PaginationBar
                 currentPage={page}

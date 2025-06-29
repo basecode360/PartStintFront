@@ -15,29 +15,20 @@ import {
   Checkbox,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { useProductStore } from '../store/productStore';
 import { useNavigate } from 'react-router-dom';
 import apiService from '../api/apiService';
 
-export default function AddStrategyPage() {
-  const { ItemId, AllProducts, modifyProductsObj, sku } = useProductStore();
-  const [product, setProduct] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+export default function AddStrategyForm() {
   const navigate = useNavigate();
+  const [submitting, setSubmitting] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
     strategyName: '',
     repricingRule: '',
-    beatByType: '', // "AMOUNT" or "PERCENTAGE"
-    beatByValue: '',
-    stayAboveType: '', // "AMOUNT" or "PERCENTAGE"
-    stayAboveValue: '',
+    byType: '', // "AMOUNT" or "PERCENTAGE" - unified for both beat and stay above
+    value: '',
     noCompetitionAction: 'USE_MAX_PRICE',
-    maxPrice: '',
-    minPrice: '',
     assignToActiveListings: false,
   });
 
@@ -45,49 +36,6 @@ export default function AddStrategyPage() {
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
   const [alertSeverity, setAlertSeverity] = useState('info');
-
-  // Effect to fetch product data
-  useEffect(() => {
-    const fetchProductData = async () => {
-      try {
-        setLoading(true);
-        const productObj = AllProducts.filter((item) =>
-          item.sku ? item.sku === sku : item.productId === ItemId
-        );
-
-        if (productObj.length === 0) {
-          setError('Product not found');
-          return;
-        }
-
-        setProduct(productObj);
-        modifyProductsObj(productObj);
-
-        // Set default prices from product data
-        if (productObj[0]?.myPrice) {
-          const priceString = productObj[0].myPrice;
-          const priceValue = priceString.includes(' ')
-            ? priceString.split(' ')[1]
-            : priceString.replace(/[^0-9.]/g, '');
-
-          setFormData((prev) => ({
-            ...prev,
-            minPrice: (parseFloat(priceValue) * 0.9).toFixed(2),
-            maxPrice: (parseFloat(priceValue) * 1.5).toFixed(2),
-          }));
-        }
-      } catch (err) {
-        setError('Error loading product data: ' + err.message);
-        console.error('Error loading product:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (ItemId) {
-      fetchProductData();
-    }
-  }, [ItemId, AllProducts, modifyProductsObj]);
 
   // Handle input changes
   const handleInputChange = (event) => {
@@ -105,10 +53,8 @@ export default function AddStrategyPage() {
       ...prev,
       repricingRule: value,
       // Reset dependent fields when rule changes
-      beatByType: '',
-      beatByValue: '',
-      stayAboveType: '',
-      stayAboveValue: '',
+      byType: '',
+      value: '',
     }));
   };
 
@@ -133,30 +79,19 @@ export default function AddStrategyPage() {
       noCompetitionAction: formData.noCompetitionAction,
     };
 
-    if (formData.minPrice) {
-      payload.minPrice = parseFloat(formData.minPrice);
-    }
-    if (formData.maxPrice) {
-      payload.maxPrice = parseFloat(formData.maxPrice);
-    }
-
-    // Add strategy-specific parameters
+    // Add strategy-specific parameters based on rule type
     if (formData.repricingRule === 'BEAT_LOWEST') {
-      if (formData.beatByType === 'AMOUNT') {
-        payload.beatBy = 'AMOUNT';
-        payload.value = parseFloat(formData.beatByValue);
-      } else if (formData.beatByType === 'PERCENTAGE') {
-        payload.beatBy = 'PERCENTAGE';
-        payload.value = parseFloat(formData.beatByValue) / 100; // Convert to decimal
-      }
+      payload.beatBy = formData.byType;
+      payload.value =
+        formData.byType === 'PERCENTAGE'
+          ? parseFloat(formData.value) / 100 // Convert to decimal
+          : parseFloat(formData.value);
     } else if (formData.repricingRule === 'STAY_ABOVE') {
-      if (formData.stayAboveType === 'AMOUNT') {
-        payload.stayAboveBy = 'AMOUNT';
-        payload.value = parseFloat(formData.stayAboveValue);
-      } else if (formData.stayAboveType === 'PERCENTAGE') {
-        payload.stayAboveBy = 'PERCENTAGE';
-        payload.value = parseFloat(formData.stayAboveValue) / 100; // Convert to decimal
-      }
+      payload.stayAboveBy = formData.byType;
+      payload.value =
+        formData.byType === 'PERCENTAGE'
+          ? parseFloat(formData.value) / 100 // Convert to decimal
+          : parseFloat(formData.value);
     }
 
     return payload;
@@ -166,26 +101,6 @@ export default function AddStrategyPage() {
   const handleAddStrategy = async () => {
     try {
       setSubmitting(true);
-
-      // Debug token before making request
-      let token;
-      try {
-        const userStore = JSON.parse(localStorage.getItem('app_jwt') || '{}');
-        token =
-          userStore?.state?.user?.token || localStorage.getItem('app_jwt');
-      } catch {
-        token = localStorage.getItem('app_jwt');
-      }
-
-      
-
-      if (!token) {
-        showAlert(
-          'No authentication token found. Please log in again.',
-          'error'
-        );
-        return;
-      }
 
       // Validate required fields
       if (!formData.strategyName) {
@@ -197,19 +112,18 @@ export default function AddStrategyPage() {
         return;
       }
 
-      // Validate strategy-specific fields
-      if (formData.repricingRule === 'BEAT_LOWEST') {
-        if (!formData.beatByType || !formData.beatByValue) {
+      // Validate strategy-specific fields for BEAT_LOWEST and STAY_ABOVE
+      if (
+        formData.repricingRule === 'BEAT_LOWEST' ||
+        formData.repricingRule === 'STAY_ABOVE'
+      ) {
+        if (!formData.byType || !formData.value) {
           showAlert(
-            'Beat by type and value are required for Beat Lowest strategy',
-            'error'
-          );
-          return;
-        }
-      } else if (formData.repricingRule === 'STAY_ABOVE') {
-        if (!formData.stayAboveType || !formData.stayAboveValue) {
-          showAlert(
-            'Stay above type and value are required for Stay Above strategy',
+            `${
+              formData.repricingRule === 'BEAT_LOWEST'
+                ? 'Beat by'
+                : 'Stay above by'
+            } type and value are required`,
             'error'
           );
           return;
@@ -217,90 +131,29 @@ export default function AddStrategyPage() {
       }
 
       const strategyPayload = getPricingStrategyPayload();
-      
 
-      let response;
-      if (formData.assignToActiveListings) {
-        // Create strategy and apply to all active listings
-        const strategyResp = await apiService.pricingStrategies.createStrategy(
-          strategyPayload
-        );
-        if (strategyResp.success) {
-          // Apply to all active listings would need a separate endpoint
-          showAlert('Pricing strategy created successfully!', 'success');
-          response = strategyResp;
-        } else {
-          throw new Error(strategyResp.message || 'Failed to create strategy');
-        }
+      // Create the strategy
+      const response = await apiService.pricingStrategies.createStrategy(
+        strategyPayload
+      );
+
+      if (response.success) {
+        showAlert('Pricing strategy created successfully!', 'success');
+
+        // Navigate back after success
+        setTimeout(() => {
+          navigate('/home'); // Go back to home page
+        }, 2000);
       } else {
-        // Create strategy and apply to specific product
-        response = await apiService.pricingStrategies.createStrategyOnProduct(
-          ItemId,
-          strategyPayload
-        );
-        showAlert(
-          'Pricing strategy created and applied to product!',
-          'success'
-        );
+        throw new Error(response.message || 'Failed to create strategy');
       }
-
-      
-
-      // Navigate back after success
-      setTimeout(() => {
-        navigate(-1); // Go back to previous page
-      }, 2000);
     } catch (error) {
       console.error('Error creating pricing strategy:', error);
-      if (error.message.includes('Authentication failed')) {
-        showAlert(
-          'Authentication failed. Please refresh the page and try again.',
-          'error'
-        );
-      } else {
-        showAlert(`Error: ${error.message}`, 'error');
-      }
+      showAlert(`Error: ${error.message}`, 'error');
     } finally {
       setSubmitting(false);
     }
   };
-
-  if (loading) {
-    return (
-      <Container>
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            height: '50vh',
-          }}
-        >
-          <CircularProgress />
-        </Box>
-      </Container>
-    );
-  }
-
-  if (error && !product.length) {
-    return (
-      <Container>
-        <Box sx={{ p: 4 }}>
-          <Alert severity="error">
-            {error}
-            <Button
-              variant="outlined"
-              size="small"
-              sx={{ ml: 2 }}
-              onClick={() => navigate(-1)}
-            >
-              Go Back
-            </Button>
-          </Alert>
-        </Box>
-      </Container>
-    );
-  }
 
   return (
     <Container>
@@ -332,25 +185,8 @@ export default function AddStrategyPage() {
           mb={3}
           sx={{ textAlign: 'left', color: '#333' }}
         >
-          Add Pricing Strategy
+          Add Strategy
         </Typography>
-
-        {/* Product Info */}
-        <Box mb={3}>
-          <Typography
-            variant="body1"
-            color="primary"
-            fontWeight={600}
-            sx={{ textAlign: 'left', fontSize: '15px' }}
-          >
-            {product[0]?.productTitle || 'Product'}
-            <br />
-            <Typography variant="caption" color="text.secondary">
-              {product[0]?.productId || ItemId} |{' '}
-              <span style={{ color: '#2E865F' }}>Active</span>
-            </Typography>
-          </Typography>
-        </Box>
 
         <Box component="form" display="flex" flexDirection="column" gap={3}>
           {/* Strategy Name */}
@@ -360,7 +196,7 @@ export default function AddStrategyPage() {
             value={formData.strategyName}
             onChange={handleInputChange}
             required
-            placeholder="e.g. Beat Competitors by $5"
+            placeholder="Enter strategy name"
             sx={{
               '& .MuiInputLabel-root': { fontSize: '16px' },
               '& .MuiInputBase-root': { fontSize: '16px' },
@@ -381,99 +217,50 @@ export default function AddStrategyPage() {
             }}
           >
             <MenuItem value="">Select a rule</MenuItem>
-            <MenuItem value="MATCH_LOWEST">Match Lowest Price</MenuItem>
-            <MenuItem value="BEAT_LOWEST">Below the Lowest Price</MenuItem>
-            <MenuItem value="STAY_ABOVE">Above the Lowest Price</MenuItem>
+            <MenuItem value="MATCH_LOWEST">Match the Lowest Price</MenuItem>
+            <MenuItem value="BEAT_LOWEST">BELOW the Lowest Price</MenuItem>
+            <MenuItem value="STAY_ABOVE">ABOVE the Lowest Price</MenuItem>
           </TextField>
 
-          {/* Show additional fields based on repricing rule */}
-          {formData.repricingRule === 'BEAT_LOWEST' && (
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <TextField
-                  select
-                  label="Beat By"
-                  name="beatByType"
-                  value={formData.beatByType}
-                  onChange={handleInputChange}
-                  fullWidth
-                  required
-                >
-                  <MenuItem value="">Select type</MenuItem>
-                  <MenuItem value="AMOUNT">Amount ($)</MenuItem>
-                  <MenuItem value="PERCENTAGE">Percentage (%)</MenuItem>
-                </TextField>
-              </Grid>
-              <Grid item xs={6}>
-                <TextField
-                  label={
-                    formData.beatByType === 'PERCENTAGE'
-                      ? 'Percentage'
-                      : 'Amount'
-                  }
-                  name="beatByValue"
-                  value={formData.beatByValue}
-                  onChange={handleInputChange}
-                  placeholder={
-                    formData.beatByType === 'PERCENTAGE'
-                      ? 'e.g. 10'
-                      : 'e.g. 5.00'
-                  }
-                  type="number"
-                  inputProps={{
-                    step: formData.beatByType === 'PERCENTAGE' ? '1' : '0.01',
-                    min: '0',
-                  }}
-                  required
-                  fullWidth
-                />
-              </Grid>
-            </Grid>
-          )}
+          {/* Show By dropdown and Value input for BEAT_LOWEST and STAY_ABOVE */}
+          {(formData.repricingRule === 'BEAT_LOWEST' ||
+            formData.repricingRule === 'STAY_ABOVE') && (
+            <>
+              <TextField
+                select
+                label="By"
+                name="byType"
+                value={formData.byType}
+                onChange={handleInputChange}
+                required
+                sx={{
+                  '& .MuiInputLabel-root': { fontSize: '16px' },
+                  '& .MuiInputBase-root': { fontSize: '16px' },
+                }}
+              >
+                <MenuItem value="">Select type</MenuItem>
+                <MenuItem value="AMOUNT">Amount</MenuItem>
+                <MenuItem value="PERCENTAGE">Percentage</MenuItem>
+              </TextField>
 
-          {formData.repricingRule === 'STAY_ABOVE' && (
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <TextField
-                  select
-                  label="Stay Above By"
-                  name="stayAboveType"
-                  value={formData.stayAboveType}
-                  onChange={handleInputChange}
-                  fullWidth
-                  required
-                >
-                  <MenuItem value="">Select type</MenuItem>
-                  <MenuItem value="AMOUNT">Amount ($)</MenuItem>
-                  <MenuItem value="PERCENTAGE">Percentage (%)</MenuItem>
-                </TextField>
-              </Grid>
-              <Grid item xs={6}>
-                <TextField
-                  label={
-                    formData.stayAboveType === 'PERCENTAGE'
-                      ? 'Percentage'
-                      : 'Amount'
-                  }
-                  name="stayAboveValue"
-                  value={formData.stayAboveValue}
-                  onChange={handleInputChange}
-                  placeholder={
-                    formData.stayAboveType === 'PERCENTAGE'
-                      ? 'e.g. 15'
-                      : 'e.g. 10.00'
-                  }
-                  type="number"
-                  inputProps={{
-                    step:
-                      formData.stayAboveType === 'PERCENTAGE' ? '1' : '0.01',
-                    min: '0',
-                  }}
-                  required
-                  fullWidth
-                />
-              </Grid>
-            </Grid>
+              <TextField
+                label="Value"
+                name="value"
+                value={formData.value}
+                onChange={handleInputChange}
+                placeholder="0"
+                type="number"
+                inputProps={{
+                  step: formData.byType === 'PERCENTAGE' ? '1' : '0.01',
+                  min: '0',
+                }}
+                required
+                sx={{
+                  '& .MuiInputLabel-root': { fontSize: '16px' },
+                  '& .MuiInputBase-root': { fontSize: '16px' },
+                }}
+              />
+            </>
           )}
 
           {/* Advanced Options */}
@@ -505,33 +292,6 @@ export default function AddStrategyPage() {
             </Grid>
           </Grid>
 
-          {/* Price Constraints */}
-          <TextField
-            label="Min Price"
-            name="minPrice"
-            value={formData.minPrice}
-            onChange={handleInputChange}
-            type="number"
-            inputProps={{ step: '0.01', min: '0' }}
-            sx={{
-              '& .MuiInputLabel-root': { fontSize: '16px' },
-              '& .MuiInputBase-root': { fontSize: '16px' },
-            }}
-          />
-
-          <TextField
-            label="Max Price"
-            name="maxPrice"
-            value={formData.maxPrice}
-            onChange={handleInputChange}
-            type="number"
-            inputProps={{ step: '0.01', min: '0' }}
-            sx={{
-              '& .MuiInputLabel-root': { fontSize: '16px' },
-              '& .MuiInputBase-root': { fontSize: '16px' },
-            }}
-          />
-
           {/* Assign to Active Listings Checkbox */}
           <Box mt={2}>
             <FormControlLabel
@@ -546,7 +306,7 @@ export default function AddStrategyPage() {
             />
           </Box>
 
-          {/* Add Button */}
+          {/* Add Strategy Button */}
           <Button
             variant="contained"
             color="primary"
@@ -554,12 +314,13 @@ export default function AddStrategyPage() {
             disabled={submitting}
             sx={{
               padding: '12px 20px',
-              width: '120px',
+              width: '140px',
               fontWeight: 600,
               fontSize: '16px',
-              borderRadius: '25px',
+              borderRadius: '8px',
+              backgroundColor: '#6c92bf',
               '&:hover': {
-                backgroundColor: '#1976d2',
+                backgroundColor: '#5a7ba8',
                 boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
               },
               transition: 'all 0.3s ease-in-out',

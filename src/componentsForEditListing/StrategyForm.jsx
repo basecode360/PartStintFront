@@ -84,14 +84,15 @@ export default function EditStrategy() {
           : priceString.replace(/[^0-9.]/g, '');
         setOldPrice(priceValue);
 
+        // Set initial form data with default min/max (will be overridden if strategy exists)
         setFormData((prev) => ({
           ...prev,
           myLandedPrice: priceValue,
-          minPrice: (parseFloat(priceValue) * 0.1).toFixed(2), // 10% of current price instead of 90%
-          maxPrice: (parseFloat(priceValue) * 1.5).toFixed(2),
+          minPrice: (parseFloat(priceValue) * 0.1).toFixed(2), // Default fallback
+          maxPrice: (parseFloat(priceValue) * 1.5).toFixed(2), // Default fallback
         }));
 
-        // Strategy/Rule fetching
+        // Strategy/Rule fetching - this will override min/max if strategy exists
         await fetchExistingData(productId);
 
         // Fetch competitor prices to populate lowest price
@@ -109,30 +110,79 @@ export default function EditStrategy() {
   // Fetch existing strategies and competitor rules
   const fetchExistingData = async (id) => {
     try {
-      // Fetch individual strategy and rule (if set on the product)
-      const { strategy, rule } =
-        await apiService.combined.getProductRulesAndStrategies(id);
-
-      if (strategy?.hasPricingStrategy && strategy.pricingStrategy) {
-        setFormData((prev) => ({
-          ...prev,
-          selectedStrategy: strategy.pricingStrategy.strategyName,
-        }));
-      }
-
-      if (rule?.hasCompetitorRule && rule.competitorRule) {
-        setFormData((prev) => ({
-          ...prev,
-          selectedCompetitorRule: rule.competitorRule.ruleName,
-        }));
-      }
-
-      // Always fetch all dropdown options
+      // Always fetch all dropdown options first
       const allOptions = await apiService.combined.getAllOptionsForDropdowns();
 
       if (allOptions.strategies?.length > 0)
         setAvailableStrategies(allOptions.strategies);
       if (allOptions.rules?.length > 0) setAvailableRules(allOptions.rules);
+
+      // Fetch current strategy display to get the proper strategy name
+      const strategyDisplayResponse =
+        await apiService.pricingStrategies.getStrategyDisplayForProduct(id);
+
+      if (
+        strategyDisplayResponse.success &&
+        strategyDisplayResponse.data &&
+        strategyDisplayResponse.data.hasStrategy
+      ) {
+        const appliedStrategy = strategyDisplayResponse.data;
+
+        // Use the strategyName (original name) to find the strategy in dropdown
+        const matchingStrategy = allOptions.strategies?.find(
+          (s) =>
+            s.strategyName === appliedStrategy.strategyName ||
+            s._id === appliedStrategy.rawStrategy?._id
+        );
+
+        setFormData((prev) => ({
+          ...prev,
+          selectedStrategy: matchingStrategy
+            ? matchingStrategy.strategyName
+            : '',
+          // Use the actual min/max prices from the applied strategy
+          minPrice: appliedStrategy.rawStrategy?.minPrice
+            ? appliedStrategy.rawStrategy.minPrice.toFixed(2)
+            : prev.minPrice,
+          maxPrice: appliedStrategy.rawStrategy?.maxPrice
+            ? appliedStrategy.rawStrategy.maxPrice.toFixed(2)
+            : prev.maxPrice,
+        }));
+
+        console.log('📊 Strategy form populated:', {
+          selectedStrategy: matchingStrategy?.strategyName,
+          minPrice: appliedStrategy.rawStrategy?.minPrice,
+          maxPrice: appliedStrategy.rawStrategy?.maxPrice,
+        });
+      }
+
+      // Fetch competitor rule (keep existing logic)
+      const { rule } = await apiService.combined.getProductRulesAndStrategies(
+        id
+      );
+
+      let existingRule = null;
+      if (
+        rule?.success &&
+        rule?.data?.hasCompetitorRule &&
+        rule.data.competitorRule
+      ) {
+        existingRule = rule.data.competitorRule;
+      } else if (rule?.hasCompetitorRule && rule.competitorRule) {
+        existingRule = rule.competitorRule;
+      } else if (rule?.data && rule.data.ruleName) {
+        existingRule = rule.data;
+      } else if (rule?.ruleName) {
+        existingRule = rule;
+      }
+
+      // Set existing competitor rule if available
+      if (existingRule) {
+        setFormData((prev) => ({
+          ...prev,
+          selectedCompetitorRule: existingRule.ruleName,
+        }));
+      }
     } catch (err) {
       console.error('Error fetching strategy/rule options:', err);
     }
@@ -143,34 +193,47 @@ export default function EditStrategy() {
     try {
       setFetchingCompetitorPrice(true);
 
-      const competitorData = await apiService.inventory.getCompetitorPrice(
-        itemId
-      );
+      // Get only manual competitors
+      const competitorData =
+        await apiService.inventory.getManuallyAddedCompetitors(itemId);
 
       if (
-        competitorData &&
-        competitorData.allPrices &&
-        competitorData.allPrices.length > 0
+        competitorData.success &&
+        competitorData.competitors &&
+        competitorData.competitors.length > 0
       ) {
-        const lowestCompetitorPrice = Math.min(...competitorData.allPrices);
+        // Extract prices and find the lowest
+        const prices = competitorData.competitors
+          .map((comp) => parseFloat(comp.price))
+          .filter((price) => !isNaN(price));
 
-        setFormData((prev) => ({
-          ...prev,
-          lowestPrice: lowestCompetitorPrice.toFixed(2),
-        }));
+        if (prices.length > 0) {
+          const lowestCompetitorPrice = Math.min(...prices);
 
-        showAlert(
-          `Found ${
-            competitorData.count
-          } competitor prices. Lowest: $${lowestCompetitorPrice.toFixed(2)}`,
-          'info'
-        );
+          setFormData((prev) => ({
+            ...prev,
+            lowestPrice: lowestCompetitorPrice.toFixed(2),
+          }));
+
+          showAlert(
+            `Found ${
+              competitorData.competitors.length
+            } manual competitors. Lowest: $${lowestCompetitorPrice.toFixed(2)}`,
+            'info'
+          );
+        } else {
+          setFormData((prev) => ({
+            ...prev,
+            lowestPrice: '0.00',
+          }));
+          showAlert('Manual competitors found but no valid prices', 'warning');
+        }
       } else {
         setFormData((prev) => ({
           ...prev,
           lowestPrice: '0.00',
         }));
-        showAlert('No competitor prices found for this product', 'warning');
+        showAlert('No manual competitors found for this product', 'warning');
       }
     } catch (err) {
       console.error('Error fetching competitor price:', err);
@@ -196,7 +259,6 @@ export default function EditStrategy() {
       );
 
       if (historyData.success && historyData.priceHistory) {
-        
         setPriceHistory(historyData.priceHistory);
       } else {
         setPriceHistory([]);
@@ -243,48 +305,20 @@ export default function EditStrategy() {
         return;
       }
 
-      // Step 1: Update the strategy with new min/max prices
-      const updatePayload = {
-        strategyName: selectedStrategyObj.strategyName,
-        repricingRule: selectedStrategyObj.repricingRule,
-        description: selectedStrategyObj.description,
-        beatBy: selectedStrategyObj.beatBy,
-        stayAboveBy: selectedStrategyObj.stayAboveBy,
-        value: selectedStrategyObj.value,
-        noCompetitionAction: selectedStrategyObj.noCompetitionAction,
-        minPrice: parseFloat(formData.minPrice),
-        maxPrice: parseFloat(formData.maxPrice),
-        isActive: selectedStrategyObj.isActive,
-        isDefault: selectedStrategyObj.isDefault,
-      };
-
-
-      const strategyResponse =
-        await apiService.pricingStrategies.updateStrategy(
-          selectedStrategyObj._id,
-          updatePayload
-        );
-
-      if (!strategyResponse.success) {
-        showAlert(
-          'Failed to update strategy: ' + strategyResponse.message,
-          'error'
-        );
-        return;
-      }
-
-      
-
+      // FIXED: Apply strategy to this specific product with listing-specific min/max prices
       const applyResponse =
-        await apiService.pricingStrategies.applyStrategyToProduct(productId, [
-          selectedStrategyObj._id,
-        ]);
+        await apiService.pricingStrategies.applyStrategyToProduct(productId, {
+          strategyId: selectedStrategyObj._id,
+          sku: product?.sku || null,
+          title: product?.productTitle || null,
+          minPrice: parseFloat(formData.minPrice),
+          maxPrice: parseFloat(formData.maxPrice),
+        });
 
       if (!applyResponse.success) {
         showAlert(
-          'Strategy updated but failed to apply to product: ' +
-            applyResponse.message,
-          'warning'
+          'Failed to apply strategy to product: ' + applyResponse.message,
+          'error'
         );
         return;
       }
@@ -296,11 +330,11 @@ export default function EditStrategy() {
 
       if (priceUpdated) {
         showAlert(
-          'Strategy updated, applied to product, and price updated automatically!',
+          'Strategy applied to product and price updated automatically!',
           'success'
         );
       } else {
-        showAlert('Strategy updated and applied successfully!', 'success');
+        showAlert('Strategy applied successfully!', 'success');
       }
 
       // Force immediate refresh with multiple signals
@@ -505,9 +539,8 @@ export default function EditStrategy() {
             label="My Landed Price"
             name="myLandedPrice"
             value={formData.myLandedPrice}
-            onChange={handleInputChange}
             type="number"
-            inputProps={{ step: '0.01', min: '0' }}
+            inputProps={{ step: '0.01', min: '0', readOnly: true }}
             sx={{
               '& .MuiInputLabel-root': { fontSize: '16px' },
               '& .MuiInputBase-root': { fontSize: '16px' },
@@ -519,9 +552,8 @@ export default function EditStrategy() {
             label="Lowest Price"
             name="lowestPrice"
             value={formData.lowestPrice}
-            onChange={handleInputChange}
             type="number"
-            inputProps={{ step: '0.01', min: '0' }}
+            inputProps={{ step: '0.01', min: '0', readOnly: true }}
             InputProps={{
               endAdornment: fetchingCompetitorPrice ? (
                 <CircularProgress size={20} />

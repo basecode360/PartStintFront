@@ -19,6 +19,10 @@ import AddStrategy from './pages/AddStrategy';
 import CompetitorRule from './pages/CompetitorRule';
 import { userStore } from './store/authStore';
 import getValidAuthToken from './utils/getValidAuthToken';
+import CompetitorsPage from './pages/CompetitorsPage';
+import PricingStrategiesPage from './pages/PricingStrategiesPage';
+import EditStrategyPage from './pages/EditStrategyPage';
+import EditCompetitorRulePage from './pages/EditCompetitorRulePage';
 
 export default function AppRoutes() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -71,7 +75,7 @@ export default function AppRoutes() {
       {/* 2) Popup callback—the very page eBay will redirect to after consent */}
       <Route path="/auth/popup-callback" element={<PopupCallback />} />
 
-      {/* 3) Protected “Home” + nested children */}
+      {/* 3) Protected "Home" + nested children */}
       <Route
         path="/home"
         element={
@@ -85,9 +89,22 @@ export default function AppRoutes() {
         <Route path="edit-listing" element={<EditListing />} />
         <Route path="update-strategy/:productId" element={<PriceStrategy />} />
         <Route path="competitors/:itemId" element={<CompetitorDetails />} />
-        <Route path="add-competitor-manually/:itemId" element={<AddCompetitorManually />} />
+        <Route
+          path="add-competitor-manually/:itemId"
+          element={<AddCompetitorManually />}
+        />
         <Route path="add-strategy" element={<AddStrategy />} />
         <Route path="add-competitor-rule" element={<CompetitorRule />} />
+        <Route path="competitors" element={<CompetitorsPage />} />
+        <Route path="pricing-strategies" element={<PricingStrategiesPage />} />
+        <Route
+          path="edit-strategy/:strategyName"
+          element={<EditStrategyPage />}
+        />
+        <Route
+          path="edit-competitor-rule/:ruleName"
+          element={<EditCompetitorRulePage />}
+        />
       </Route>
     </Routes>
   );

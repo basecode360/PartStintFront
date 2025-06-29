@@ -1,14 +1,17 @@
-// import { defineConfig } from 'vite'
-// import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
-// // https://vite.dev/config/
-// export default defineConfig({
-//   plugins: [react()],
-// })
-export default {
+export default defineConfig({
+  plugins: [react()],
   server: {
+    port: 5173,
     proxy: {
-      '/api': 'https://api.17autoparts.com/api',
+      '/api': {
+        target: 'https://api.17autoparts.com',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path, // Keep the /api prefix
+      },
     },
   },
-};
+});

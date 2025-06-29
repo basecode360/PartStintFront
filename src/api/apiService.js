@@ -114,12 +114,34 @@ competitorClient.interceptors.response.use(
 
 /** ————————————— GLOBAL RESPONSE INTERCEPTOR ————————————— **/
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Check for eBay API errors even in successful HTTP responses
+    if (
+      response.data?.success &&
+      response.data?.data?.GetMyeBaySellingResponse?.Ack === 'Failure'
+    ) {
+      const ebayError = response.data.data.GetMyeBaySellingResponse.Errors;
+
+      if (ebayError?.ErrorCode === '932') {
+        console.warn('eBay token hard expired detected in response');
+        localStorage.removeItem('ebay_user_token');
+        localStorage.removeItem('ebay_refresh_token');
+
+        // Dispatch event to notify components
+        window.dispatchEvent(new CustomEvent('ebayTokenExpired'));
+      }
+    }
+
+    return response;
+  },
   (error) => {
     if (error.response?.status === 401) {
       // Check if it's an eBay token expiry
       const errorData = error.response.data;
-      if (errorData?.errors?.[0]?.errorId === 932) {
+      if (
+        errorData?.errors?.[0]?.errorId === 932 ||
+        errorData?.data?.GetMyeBaySellingResponse?.Errors?.ErrorCode === '932'
+      ) {
         localStorage.removeItem('ebay_user_token');
         localStorage.removeItem('ebay_refresh_token');
 
@@ -175,48 +197,6 @@ const inventory = {
       return resp.data;
     } catch (err) {
       return { success: false, error: err.message };
-    }
-  },
-  getCompetitorPrice: async (itemId) => {
-    try {
-      const userId = localStorage.getItem('user_id');
-
-      if (!userId) {
-        return { price: 'USD0.00', count: 0, allPrices: [], productInfo: [] };
-      }
-
-      const resp = await apiClient.get(`/competitor-prices/${itemId}`, {
-        params: { userId },
-      });
-
-      // Check if the response has the expected structure
-      if (!resp.data || !resp.data.success) {
-        return { price: 'USD0.00', count: 0, allPrices: [], productInfo: [] };
-      }
-
-      // Updated to match the actual API response structure
-      const competitorPrices = resp.data?.competitorPrices || {};
-
-      const allPrices = Array.isArray(competitorPrices.allPrices)
-        ? competitorPrices.allPrices
-        : [];
-      const allData = Array.isArray(competitorPrices.allData)
-        ? competitorPrices.allData
-        : [];
-
-      const result = {
-        price:
-          allPrices.length > 0
-            ? `USD${parseFloat(Math.min(...allPrices)).toFixed(2)}`
-            : 'USD0.00',
-        count: allPrices.length,
-        allPrices,
-        productInfo: allData,
-      };
-
-      return result;
-    } catch (err) {
-      return { price: 'USD0.00', count: 0, allPrices: [], productInfo: [] };
     }
   },
   getManuallyAddedCompetitors: async (itemId) => {
@@ -437,17 +417,40 @@ const pricingStrategies = {
       throw err;
     }
   },
-  applyStrategyToProduct: async (itemId, strategyIds) => {
+  applyStrategyToProduct: async (itemId, strategyData) => {
     try {
-      const resp = await pricingClient.post(`/products/${itemId}`, {
-        strategyIds: Array.isArray(strategyIds) ? strategyIds : [strategyIds],
-      });
-      return resp.data;
-    } catch (err) {
-      if (err.response?.status === 401) {
-        throw new Error('Authentication failed. Please log in again.');
+      // Handle both array and single strategy formats
+      if (Array.isArray(strategyData) && strategyData.length === 1) {
+        const item = strategyData[0];
+        // Use pricingClient directly instead of makeRequest
+        const response = await pricingClient.post(`/products/${itemId}/apply`, {
+          strategyId: item.strategyId || item._id,
+          sku: item.sku,
+          title: item.title,
+          minPrice: item.minPrice,
+          maxPrice: item.maxPrice,
+        });
+        return response.data;
+      } else if (!Array.isArray(strategyData)) {
+        // Handle single object format
+        const response = await pricingClient.post(`/products/${itemId}/apply`, {
+          strategyId: strategyData.strategyId || strategyData._id,
+          sku: strategyData.sku,
+          title: strategyData.title,
+          minPrice: strategyData.minPrice,
+          maxPrice: strategyData.maxPrice,
+        });
+        return response.data;
+      } else {
+        // Handle multiple items or old format
+        const response = await pricingClient.post('/apply', {
+          items: strategyData,
+        });
+        return response.data;
       }
-      throw err;
+    } catch (error) {
+      console.error('Error applying strategy to product:', error);
+      throw error;
     }
   },
 
@@ -520,55 +523,28 @@ const pricingStrategies = {
   },
   getStrategyDisplayForProduct: async (itemId, sku = null) => {
     try {
-      const params = sku ? `?sku=${encodeURIComponent(sku)}` : '';
-
-      // Add cache-busting timestamp to prevent stale data
-      const cacheBuster = `${params ? '&' : '?'}t=${Date.now()}`;
-
+      const queryParams = sku ? `?sku=${encodeURIComponent(sku)}` : '';
       const response = await pricingClient.get(
-        `/products/${itemId}/display${params}${cacheBuster}`
+        `/products/${itemId}/display${queryParams}`
       );
-
       return response.data;
     } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message,
-        data: {
-          strategy: 'Assign Strategy',
-          minPrice: 'Set',
-          maxPrice: 'Set',
-          hasStrategy: false,
-        },
-      };
+      console.error('Error getting strategy display:', error);
+      throw error;
     }
   },
 
   updatePrice: async (itemId) => {
     try {
-      const response = await pricingClient.post(
-        `/products/${itemId}/update-price`
-      );
+      const response = await pricingClient.post(`/products/${itemId}/execute`);
       return response.data;
     } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message,
-      };
+      console.error('Error updating price:', error);
+      throw error;
     }
   },
 
-  updateStrategy: async (strategyId, updateData) => {
-    try {
-      const response = await pricingClient.put(`/${strategyId}`, updateData);
-      return response.data;
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message,
-      };
-    }
-  },
+  // ...existing code...
 };
 
 /** ————————————— COMPETITOR RULES ————————————— **/
@@ -669,9 +645,13 @@ const competitorRules = {
       const resp = await competitorClient.get(`/`, {
         params: { active: true, userId },
       });
+
+      // Handle both possible response structures
+      const rules = resp.data?.data || resp.data?.rules || resp.data || [];
+
       return {
         success: true,
-        rules: resp.data?.data || [],
+        rules: Array.isArray(rules) ? rules : [],
       };
     } catch (err) {
       if (err.response?.status === 404) {
@@ -771,7 +751,7 @@ const combined = {
   },
 };
 
-const BASE_URL = import.meta.env.VITE_API_URL
+const BASE_URL = import.meta.env.VITE_API_URL;
 
 // Helper function to create authenticated requests
 const createAuthenticatedRequest = async () => {
@@ -796,7 +776,7 @@ const priceHistory = {
       const { headers } = await createAuthenticatedRequest();
 
       const response = await fetch(
-        `${BASE_URL}/price-history/product/${itemId}?limit=${limit}`,
+        `${BACKEND_URL}/api/price-history/product/${itemId}?limit=${limit}`,
         {
           method: 'GET',
           headers,
@@ -820,7 +800,7 @@ const priceHistory = {
       const { headers } = await createAuthenticatedRequest();
 
       const response = await fetch(
-        `${BASE_URL}/price-history/summary/${itemId}`,
+        `${BACKEND_URL}/api/price-history/summary/${itemId}`,
         {
           method: 'GET',
           headers,

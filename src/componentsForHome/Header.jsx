@@ -12,7 +12,7 @@ import {
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import { useNavigate } from 'react-router-dom';
-import logo from '../assets/logo.jpg';
+import logo from '../assets/logo.png';
 import apiService from '../api/apiService';
 import { userStore } from '../store/authStore';
 
