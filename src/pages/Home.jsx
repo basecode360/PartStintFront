@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import apiService from '../api/apiService';
 import getValidAuthToken from '../utils/getValidAuthToken';
-import { userStore } from '../store/authStore';
+import useAuthStore from '../store/authStore';
 
 import Header from '../componentsForHome/Header';
 import NavTabs from '../componentsForHome/NavTabs';
@@ -24,7 +24,7 @@ export default function Home({ handleLogout }) {
   const [loadingListings, setLoadingListings] = useState(false);
   const [listingsError, setListingsError] = useState(null);
 
-  const user = userStore((store) => store.user);
+  const user = useAuthStore((store) => store.user);
   const location = useLocation();
   const popupRef = useRef(null); // will hold reference to the OAuth popup window
 

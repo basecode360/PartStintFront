@@ -33,7 +33,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useProductStore from '../store/productStore';
-import { useAuth } from '../store/authStore';
+import useAuthHook from '../store/authStore';
 
 // Import your API service
 import apiService from '../api/apiService';
@@ -47,7 +47,7 @@ export default function ListingsTable({
 }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user } = useAuthHook();
   const [rows, setRows] = useState([]);
   const [listingsLoading, setListingsLoading] = useState(true);
   const [error, setError] = useState(null);

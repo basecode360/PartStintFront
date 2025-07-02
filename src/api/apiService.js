@@ -25,27 +25,75 @@ const competitorClient = axios.create({
   baseURL: `${BACKEND_URL}/api/competitor-rules`,
 });
 
-/** ————————— UTILITY: Attach eBay user‐token ————————— **/
+/** ————————— UTILITY: Get tokens and user ID ————————— **/
 function getRawEbayTokenFromStorage() {
   return localStorage.getItem('ebay_user_token');
 }
 
 function getAppJwtToken() {
   try {
-    const store = JSON.parse(localStorage.getItem('user-store') || '{}');
-    const token = store?.state?.user?.token;
-    return typeof token === 'string' ? token : '';
+    // First try to get from Zustand auth-store (new format)
+    const authStore = JSON.parse(localStorage.getItem('auth-store') || '{}');
+    if (authStore?.state?.user?.token) {
+      return authStore.state.user.token;
+    }
+
+    // Fallback to old user-store format
+    const userStore = JSON.parse(localStorage.getItem('user-store') || '{}');
+    if (userStore?.state?.user?.token) {
+      return userStore.state.user.token;
+    }
+
+    // Fallback to direct localStorage
+    return localStorage.getItem('app_jwt') || '';
   } catch (e) {
-    return '';
+    console.error('Error getting JWT token:', e);
+    return localStorage.getItem('app_jwt') || '';
   }
 }
 
-// Before each request to /api/ebay or /api/pricing-strategies or /api/competitor-rules:
+function getUserId() {
+  try {
+    // First try to get from Zustand auth-store (new format)
+    const authStore = JSON.parse(localStorage.getItem('auth-store') || '{}');
+    if (authStore?.state?.user?.id) {
+      return authStore.state.user.id;
+    }
+
+    // Fallback to old user-store format
+    const userStore = JSON.parse(localStorage.getItem('user-store') || '{}');
+    if (userStore?.state?.user?.id) {
+      return userStore.state.user.id;
+    }
+
+    // Fallback to direct localStorage
+    return localStorage.getItem('user_id') || localStorage.getItem('userId') || '';
+  } catch (e) {
+    console.error('Error getting user ID:', e);
+    return localStorage.getItem('user_id') || localStorage.getItem('userId') || '';
+  }
+}
+
+// FIXED: Enhanced request interceptors with authentication and userId
 apiClient.interceptors.request.use((config) => {
   const token = getAppJwtToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Also add userId to query params if not present and available
+  const userId = getUserId();
+  if (userId && !config.params?.userId && !config.url?.includes('userId=')) {
+    config.params = { ...config.params, userId };
+  }
+
+  console.log('🔑 eBay API Request:', {
+    url: config.url,
+    hasToken: !!token,
+    userId: userId,
+    method: config.method
+  });
+
   return config;
 });
 
@@ -54,6 +102,20 @@ pricingClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Also add userId to query params if not present and available
+  const userId = getUserId();
+  if (userId && !config.params?.userId && !config.url?.includes('userId=')) {
+    config.params = { ...config.params, userId };
+  }
+
+  console.log('💰 Pricing Request:', {
+    url: config.url,
+    hasToken: !!token,
+    userId: userId,
+    method: config.method
+  });
+
   return config;
 });
 
@@ -62,57 +124,42 @@ competitorClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Also add userId to query params if not present and available
+  const userId = getUserId();
+  if (userId && !config.params?.userId && !config.url?.includes('userId=')) {
+    config.params = { ...config.params, userId };
+  }
+
   return config;
 });
 
 /** ————————————— RESPONSE INTERCEPTORS FOR AUTH ERRORS ————————————— **/
-// Handle 401 errors for pricing strategies
-pricingClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      console.warn(
-        '⚠️ Authentication failed for pricing strategies. Clearing storage and reloading...'
-      );
+function handleAuthError(error) {
+  if (error.response?.status === 401) {
+    console.warn('⚠️ Authentication failed. Clearing storage and reloading...');
 
-      // Clear all authentication-related data
-      localStorage.removeItem('user-store');
-      localStorage.removeItem('ebay_user_token');
-      localStorage.removeItem('ebay_refresh_token');
-      localStorage.removeItem('userId');
-      localStorage.removeItem('user_id');
+    // Clear all authentication-related data
+    localStorage.removeItem('auth-store');
+    localStorage.removeItem('user-store');
+    localStorage.removeItem('app_jwt');
+    localStorage.removeItem('ebay_user_token');
+    localStorage.removeItem('ebay_refresh_token');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('user_id');
 
-      // Reload the page to redirect to login
-      window.location.reload();
-    }
-    return Promise.reject(error);
+    // Reload the page to redirect to login
+    window.location.reload();
   }
-);
+  return Promise.reject(error);
+}
 
-// Handle 401 errors for competitor rules
-competitorClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      console.warn(
-        '⚠️ Authentication failed for competitor rules. Clearing storage and reloading...'
-      );
+// Handle 401 errors for all clients
+apiClient.interceptors.response.use((response) => response, handleAuthError);
+pricingClient.interceptors.response.use((response) => response, handleAuthError);
+competitorClient.interceptors.response.use((response) => response, handleAuthError);
 
-      // Clear all authentication-related data
-      localStorage.removeItem('user-store');
-      localStorage.removeItem('ebay_user_token');
-      localStorage.removeItem('ebay_refresh_token');
-      localStorage.removeItem('userId');
-      localStorage.removeItem('user_id');
-
-      // Reload the page to redirect to login
-      window.location.reload();
-    }
-    return Promise.reject(error);
-  }
-);
-
-/** ————————————— GLOBAL RESPONSE INTERCEPTOR ————————————— **/
+/** ————————————— GLOBAL RESPONSE INTERCEPTOR FOR EBAY ERRORS ————————————— **/
 apiClient.interceptors.response.use(
   (response) => {
     // Check for eBay API errors even in successful HTTP responses
@@ -152,7 +199,9 @@ apiClient.interceptors.response.use(
         console.warn(
           '⚠️ Authentication failed. Clearing storage and reloading...'
         );
+        localStorage.removeItem('auth-store');
         localStorage.removeItem('user-store');
+        localStorage.removeItem('app_jwt');
         localStorage.removeItem('ebay_user_token');
         localStorage.removeItem('ebay_refresh_token');
         localStorage.removeItem('userId');
@@ -168,7 +217,7 @@ apiClient.interceptors.response.use(
 const inventory = {
   getActiveListings: async () => {
     try {
-      const userId = localStorage.getItem('user_id'); // Or however it's stored
+      const userId = getUserId(); // FIXED: Use updated getUserId function
       const resp = await apiClient.get('/active-listings', {
         params: { userId },
       });
@@ -201,7 +250,7 @@ const inventory = {
   },
   getManuallyAddedCompetitors: async (itemId) => {
     try {
-      const userId = localStorage.getItem('user_id');
+      const userId = getUserId(); // FIXED: Use updated getUserId function
 
       if (!userId) {
         return { success: false, error: 'User ID not found' };
@@ -225,7 +274,7 @@ const inventory = {
   },
   searchCompetitorsManually: async (itemId, competitorItemIds) => {
     try {
-      const userId = localStorage.getItem('user_id');
+      const userId = getUserId(); // FIXED: Use updated getUserId function
 
       if (!userId) {
         return { success: false, error: 'User ID not found' };
@@ -249,7 +298,7 @@ const inventory = {
   },
   addCompetitorsManually: async (itemId, competitorItemIds) => {
     try {
-      const userId = localStorage.getItem('user_id');
+      const userId = getUserId(); // FIXED: Use updated getUserId function
 
       if (!userId) {
         return { success: false, error: 'User ID not found' };
@@ -273,7 +322,7 @@ const inventory = {
   },
   removeManualCompetitor: async (itemId, competitorItemId) => {
     try {
-      const userId = localStorage.getItem('user_id');
+      const userId = getUserId(); // FIXED: Use updated getUserId function
 
       if (!userId) {
         return { success: false, error: 'User ID not found' };
@@ -295,9 +344,9 @@ const inventory = {
     }
   },
   updateListingPricing: async (itemId, { minPrice, maxPrice }) => {
-    const token = localStorage.getItem('app_jwt');
+    const token = getAppJwtToken(); // FIXED: Use updated getAppJwtToken function
     const response = await fetch(
-      `${import.meta.env.VITE_BACKEND_URL}/api/inventory/pricing/${itemId}`,
+      `${BACKEND_URL}/api/inventory/pricing/${itemId}`,
       {
         method: 'PUT',
         headers: {
@@ -416,8 +465,8 @@ const pricingStrategies = {
       const strategyId = strategyResp.data.data._id;
 
       // Then apply it to the product
-      const applyResp = await pricingClient.post(`/products/${itemId}`, {
-        strategyIds: [strategyId],
+      const applyResp = await pricingClient.post(`/products/${itemId}/apply`, {
+        strategyId: strategyId,
       });
 
       return {
@@ -434,7 +483,7 @@ const pricingStrategies = {
   },
   applyStrategyToProduct: async (itemId, strategyData) => {
     try {
-      const userId = localStorage.getItem('user_id');
+      const userId = getUserId(); // FIXED: Use updated getUserId function
 
       // Handle both array and single strategy formats
       if (Array.isArray(strategyData) && strategyData.length === 1) {
@@ -483,7 +532,7 @@ const pricingStrategies = {
   },
   getAllActiveWithStrategies: async () => {
     try {
-      const userId = localStorage.getItem('user_id');
+      const userId = getUserId(); // FIXED: Use updated getUserId function
       const resp = await pricingClient.get(`/active-listings`, {
         params: { userId },
       });
@@ -534,7 +583,7 @@ const pricingStrategies = {
   },
   getAllUniqueStrategies: async () => {
     try {
-      const userId = localStorage.getItem('user_id');
+      const userId = getUserId(); // FIXED: Use updated getUserId function
       const resp = await pricingClient.get(`/active-listings`, {
         params: { userId, active: true },
       });
@@ -587,7 +636,7 @@ const pricingStrategies = {
 /** ————————————— COMPETITOR RULES ————————————— **/
 const competitorRules = {
   createRuleOnProduct: async (itemId, ruleData) => {
-    const userId = localStorage.getItem('user_id');
+    const userId = getUserId(); // FIXED: Use updated getUserId function
     const payload = { ...ruleData, userId };
     const resp = await competitorClient.post(`/products/${itemId}`, payload);
     return resp.data;
@@ -605,7 +654,7 @@ const competitorRules = {
   },
   getRuleFromProduct: async (itemId) => {
     try {
-      const userId = localStorage.getItem('user_id');
+      const userId = getUserId(); // FIXED: Use updated getUserId function
       const resp = await competitorClient.get(`/products/${itemId}`, {
         params: { userId },
       });
@@ -616,7 +665,7 @@ const competitorRules = {
   },
   getAllActiveWithRules: async () => {
     try {
-      const userId = localStorage.getItem('user_id');
+      const userId = getUserId(); // FIXED: Use updated getUserId function
       const resp = await competitorClient.get(`/active-listings`, {
         params: { userId },
       });
@@ -651,7 +700,7 @@ const competitorRules = {
   },
   getAllUniqueRules: async () => {
     try {
-      const userId = localStorage.getItem('user_id');
+      const userId = getUserId(); // FIXED: Use updated getUserId function
       const resp = await competitorClient.get(`/active-listings`, {
         params: { userId },
       });
@@ -676,7 +725,7 @@ const competitorRules = {
   },
   getAllRules: async () => {
     try {
-      const userId = localStorage.getItem('user_id');
+      const userId = getUserId(); // FIXED: Use updated getUserId function
       const resp = await competitorClient.get(`/`, {
         params: { active: true, userId },
       });
@@ -1036,11 +1085,6 @@ const priceHistory = {
   },
 };
 
-// Helper to get userId from localStorage (key is 'user_id')
-function getUserId() {
-  return localStorage.getItem('user_id');
-}
-
 // Example: Create competitor rule for a product
 export async function createCompetitorRule(itemId, ruleData) {
   const userId = getUserId();
@@ -1079,7 +1123,7 @@ export default {
     // userId: string (logged-in user's id)
     return axios.post(`/api/competitor-rules/products/${itemId}`, {
       ...ruleData,
-      userId: localStorage.getItem('user_id'), // <-- ADD THIS LINE
+      userId: getUserId(), // FIXED: Use updated getUserId function
     });
   },
 };

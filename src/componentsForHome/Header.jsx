@@ -14,12 +14,12 @@ import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo.png';
 import apiService from '../api/apiService';
-import { userStore } from '../store/authStore';
+import useAuthStore from '../store/authStore';
 
 export default function Header({ handleLogout }) {
   const [anchorEl, setAnchorEl] = React.useState(null);
   const navigate = useNavigate();
-  const user = userStore((store) => store.user);
+  const user = useAuthStore((store) => store.user);
 
   const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);

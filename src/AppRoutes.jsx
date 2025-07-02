@@ -7,7 +7,7 @@ import {
   Navigate,
   useLocation,
 } from 'react-router-dom';
-import { useAuth } from './hooks/useAuth';
+import useAuthHook from './hooks/useAuth';
 import useAuthStore from './store/authStore'; // Fixed import
 import getValidAuthToken from './utils/getValidAuthToken';
 
@@ -39,7 +39,7 @@ const EditCompetitorRulePage = React.lazy(() =>
 
 // Protected Route component
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuthHook();
 
   if (loading) {
     return (
