@@ -294,6 +294,21 @@ const inventory = {
       };
     }
   },
+  updateListingPricing: async (itemId, { minPrice, maxPrice }) => {
+    const token = localStorage.getItem('app_jwt');
+    const response = await fetch(
+      `${import.meta.env.VITE_BACKEND_URL}/api/inventory/pricing/${itemId}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ minPrice, maxPrice }),
+      }
+    );
+    return response.json();
+  },
 };
 
 /** ————————————— AUTH (LOGIN / REGISTER / EXCHANGE CODE / GET TOKEN) ————————————— **/
@@ -419,6 +434,8 @@ const pricingStrategies = {
   },
   applyStrategyToProduct: async (itemId, strategyData) => {
     try {
+      const userId = localStorage.getItem('user_id');
+
       // Handle both array and single strategy formats
       if (Array.isArray(strategyData) && strategyData.length === 1) {
         const item = strategyData[0];
@@ -429,6 +446,7 @@ const pricingStrategies = {
           title: item.title,
           minPrice: item.minPrice,
           maxPrice: item.maxPrice,
+          userId, // ← include here
         });
         return response.data;
       } else if (!Array.isArray(strategyData)) {
@@ -439,6 +457,7 @@ const pricingStrategies = {
           title: strategyData.title,
           minPrice: strategyData.minPrice,
           maxPrice: strategyData.maxPrice,
+          userId, // ← and here
         });
         return response.data;
       } else {
@@ -473,11 +492,19 @@ const pricingStrategies = {
       return { success: false, error: err.message };
     }
   },
-  updateStrategyOnProduct: async (itemId, strategyData) => {
+  updateStrategyOnProduct: async (
+    itemId,
+    { strategyId, minPrice, maxPrice }
+  ) => {
     try {
-      const resp = await pricingClient.put(`/products/${itemId}`, strategyData);
+      const resp = await pricingClient.put(`/products/${itemId}/strategy`, {
+        strategyId,
+        minPrice,
+        maxPrice,
+      });
       return resp.data;
     } catch (err) {
+      console.error('Error updating strategy on product:', err);
       throw err;
     }
   },
@@ -534,9 +561,19 @@ const pricingStrategies = {
     }
   },
 
-  updatePrice: async (itemId) => {
+  /**
+   * Run the repricer for a given item/strategy.
+   * @param {string} itemId
+   * @param {string} strategyId  // ← NEW
+   */
+  updatePrice: async (itemId, strategyId) => {
     try {
-      const response = await pricingClient.post(`/products/${itemId}/execute`);
+      // pass strategyId as a query-param
+      const response = await pricingClient.post(
+        `/products/${itemId}/execute`,
+        null,
+        { params: { strategyId } }
+      );
       return response.data;
     } catch (error) {
       console.error('Error updating price:', error);
@@ -550,12 +587,10 @@ const pricingStrategies = {
 /** ————————————— COMPETITOR RULES ————————————— **/
 const competitorRules = {
   createRuleOnProduct: async (itemId, ruleData) => {
-    try {
-      const resp = await competitorClient.post(`/products/${itemId}`, ruleData);
-      return resp.data;
-    } catch (err) {
-      throw err;
-    }
+    const userId = localStorage.getItem('user_id');
+    const payload = { ...ruleData, userId };
+    const resp = await competitorClient.post(`/products/${itemId}`, payload);
+    return resp.data;
   },
   createRuleForAllActive: async (ruleData) => {
     try {
@@ -1001,6 +1036,37 @@ const priceHistory = {
   },
 };
 
+// Helper to get userId from localStorage (key is 'user_id')
+function getUserId() {
+  return localStorage.getItem('user_id');
+}
+
+// Example: Create competitor rule for a product
+export async function createCompetitorRule(itemId, ruleData) {
+  const userId = getUserId();
+  return axios.post(`/api/competitor-rules/products/${itemId}`, {
+    ...ruleData,
+    userId, // Always include userId from localStorage
+  });
+}
+
+// Example: Update competitor rule for a product
+export async function updateCompetitorRule(itemId, ruleData) {
+  const userId = getUserId();
+  return axios.put(`/api/competitor-rules/products/${itemId}`, {
+    ...ruleData,
+    userId,
+  });
+}
+
+// Example: Delete competitor rule for a product
+export async function deleteCompetitorRule(itemId) {
+  const userId = getUserId();
+  return axios.delete(`/api/competitor-rules/products/${itemId}`, {
+    data: { userId },
+  });
+}
+
 export default {
   inventory,
   auth,
@@ -1008,4 +1074,12 @@ export default {
   competitorRules,
   combined,
   priceHistory, // Add the price history service
+  createCompetitorRule: async (itemId, ruleData) => {
+    // ruleData: { ruleName, minPercentOfCurrentPrice, ... }
+    // userId: string (logged-in user's id)
+    return axios.post(`/api/competitor-rules/products/${itemId}`, {
+      ...ruleData,
+      userId: localStorage.getItem('user_id'), // <-- ADD THIS LINE
+    });
+  },
 };

@@ -16,7 +16,7 @@ import {
   TableBody,
   Pagination,
 } from '@mui/material';
-import { useProductStore } from '../store/productStore';
+import useProductStore from '../store/productStore';
 import apiService from '../api/apiService';
 
 export default function AddCompetitorManually() {

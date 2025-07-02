@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Container, 
-  Box, 
-  Typography, 
-  TextField, 
-  MenuItem, 
+import {
+  Container,
+  Box,
+  Typography,
+  TextField,
+  MenuItem,
   Button,
   FormControlLabel,
   Switch,
@@ -12,10 +12,10 @@ import {
   Alert,
   Collapse,
   IconButton,
-  CircularProgress
+  CircularProgress,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { useProductStore } from '../store/productStore';
+import useProductStore from '../store/productStore';
 import { useNavigate } from 'react-router-dom';
 import apiService from '../api/apiService';
 
@@ -24,13 +24,13 @@ export default function EditListing() {
   const [product, setProduct] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [oldPrice, setOldPrice] = useState(0);
   const navigate = useNavigate();
 
   // State for selected strategy
   const [strategy, setStrategy] = useState('');
-  
+
   // Effect to fetch product data
   useEffect(() => {
     const fetchProductData = async () => {
@@ -39,37 +39,37 @@ export default function EditListing() {
         const productObj = AllProducts.filter((item) =>
           item.sku ? item.sku === sku : item.productId === ItemId
         );
-        
+
         if (productObj.length === 0) {
-          setError("Product not found");
+          setError('Product not found');
           return;
         }
-        
+
         setProduct(productObj);
         modifyProductsObj(productObj);
-        
+
         // Set oldPrice from product data
         if (productObj[0]?.myPrice) {
           const priceString = productObj[0].myPrice;
           // Handle different price formats (with or without currency symbol)
-          const priceValue = priceString.includes(" ") 
-            ? priceString.split(" ")[1] 
+          const priceValue = priceString.includes(' ')
+            ? priceString.split(' ')[1]
             : priceString.replace(/[^0-9.]/g, '');
-          
+
           setOldPrice(priceValue);
-          
+
           // Initialize form values with product price
-          setFormValues(prev => ({
+          setFormValues((prev) => ({
             ...prev,
             landedPrice: priceValue,
             minPrice: (parseFloat(priceValue) * 0.9).toFixed(2), // 10% below landed price
             maxPrice: (parseFloat(priceValue) * 1.5).toFixed(2), // 50% above landed price
-            targetPrice: priceValue
+            targetPrice: priceValue,
           }));
         }
       } catch (err) {
-        setError("Error loading product data: " + err.message);
-        console.error("Error loading product:", err);
+        setError('Error loading product data: ' + err.message);
+        console.error('Error loading product:', err);
       } finally {
         setLoading(false);
       }
@@ -100,9 +100,9 @@ export default function EditListing() {
     bestOfferAutoDecline: '',
     demandMultiplier: '1.2',
     inventoryThreshold: '10',
-    notes: ''
+    notes: '',
   });
-  
+
   // State for alert
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
@@ -112,26 +112,26 @@ export default function EditListing() {
   const handleStrategyChange = (event) => {
     const selectedStrategy = event.target.value;
     setStrategy(selectedStrategy);
-    
+
     // Set default values based on strategy
     if (selectedStrategy === 'Fixed') {
-      setFormValues(prev => ({
+      setFormValues((prev) => ({
         ...prev,
         targetPrice: oldPrice || prev.landedPrice,
       }));
     } else if (selectedStrategy === 'Time Based') {
-      setFormValues(prev => ({
+      setFormValues((prev) => ({
         ...prev,
         basePrice: oldPrice || prev.landedPrice,
       }));
     } else if (selectedStrategy === 'Dynamic') {
       // Set default values for Dynamic strategy
-      setFormValues(prev => ({
+      setFormValues((prev) => ({
         ...prev,
         minPrice: prev.minPrice || (parseFloat(oldPrice) * 0.9).toFixed(2),
         maxPrice: prev.maxPrice || (parseFloat(oldPrice) * 1.5).toFixed(2),
         demandMultiplier: '1.2',
-        inventoryThreshold: '10'
+        inventoryThreshold: '10',
       }));
     }
   };
@@ -140,7 +140,7 @@ export default function EditListing() {
   const handleFormChange = (event) => {
     const { name, value, checked, type } = event.target;
     let processedValue = value;
-    
+
     // For number inputs, ensure we handle empty strings properly
     if (type === 'number' && value === '') {
       processedValue = '';
@@ -148,67 +148,73 @@ export default function EditListing() {
       // For other number values, store them as strings but validate as numbers
       processedValue = value;
     }
-    
-    setFormValues(prev => ({
+
+    setFormValues((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : processedValue
+      [name]: type === 'checkbox' ? checked : processedValue,
     }));
   };
 
   // Handle form submission
   const handleSubmit = async (event) => {
     event.preventDefault();
-    
+
     // Validate form based on selected strategy
     if (!strategy) {
       showAlert('Please select a pricing strategy', 'error');
       return;
     }
-    
+
     if (strategy === 'Fixed' && !formValues.targetPrice) {
       showAlert('Target price is required for Fixed strategy', 'error');
       return;
     }
-    
-    if ((strategy === 'Competitive' || strategy === 'Dynamic') && 
-        (!formValues.minPrice || !formValues.maxPrice)) {
+
+    if (
+      (strategy === 'Competitive' || strategy === 'Dynamic') &&
+      (!formValues.minPrice || !formValues.maxPrice)
+    ) {
       showAlert('Min and max prices are required', 'error');
       return;
     }
-    
+
     if (strategy === 'Time Based' && !formValues.basePrice) {
       showAlert('Base price is required for Time Based strategy', 'error');
       return;
     }
-    
+
     // Check min price is less than max price
-    if ((strategy === 'Competitive' || strategy === 'Dynamic') && 
-        parseFloat(formValues.minPrice) >= parseFloat(formValues.maxPrice)) {
+    if (
+      (strategy === 'Competitive' || strategy === 'Dynamic') &&
+      parseFloat(formValues.minPrice) >= parseFloat(formValues.maxPrice)
+    ) {
       showAlert('Min price must be less than max price', 'error');
       return;
     }
-    
+
     // Prepare payload based on strategy
     let payload = {
       itemId: formValues.itemId,
-      strategy: strategy.toLowerCase().replace(' ', '-')
+      strategy: strategy.toLowerCase().replace(' ', '-'),
     };
-    
+
     switch (strategy) {
       case 'Fixed':
         payload = {
           ...payload,
           targetPrice: formValues.targetPrice,
           enableBestOffer: formValues.enableBestOffer,
-          ...(formValues.enableBestOffer && formValues.bestOfferAutoAccept && {
-            bestOfferAutoAccept: formValues.bestOfferAutoAccept
-          }),
-          ...(formValues.enableBestOffer && formValues.bestOfferAutoDecline && {
-            bestOfferAutoDecline: formValues.bestOfferAutoDecline
-          })
+          ...(formValues.enableBestOffer &&
+            formValues.bestOfferAutoAccept && {
+              bestOfferAutoAccept: formValues.bestOfferAutoAccept,
+            }),
+          ...(formValues.enableBestOffer &&
+            formValues.bestOfferAutoDecline && {
+              bestOfferAutoDecline: formValues.bestOfferAutoDecline,
+            }),
         };
         break;
-        
+
       case 'Competitive':
         payload = {
           ...payload,
@@ -216,10 +222,10 @@ export default function EditListing() {
           maxPrice: formValues.maxPrice,
           targetPrice: formValues.targetPrice || formValues.landedPrice,
           repriceFrequency: formValues.repriceFrequency,
-          competitorAdjustment: formValues.competitorAdjustment
+          competitorAdjustment: formValues.competitorAdjustment,
         };
         break;
-        
+
       case 'Dynamic':
         payload = {
           ...payload,
@@ -227,55 +233,56 @@ export default function EditListing() {
           maxPrice: formValues.maxPrice,
           competitorAdjustment: formValues.competitorAdjustment,
           demandMultiplier: formValues.demandMultiplier,
-          inventoryThreshold: formValues.inventoryThreshold
+          inventoryThreshold: formValues.inventoryThreshold,
         };
         break;
-        
+
       case 'Time Based':
         payload = {
           ...payload,
           basePrice: formValues.basePrice,
           weekendBoost: formValues.weekendBoost,
           holidayBoost: formValues.holidayBoost,
-          clearanceThreshold: formValues.clearanceThreshold
+          clearanceThreshold: formValues.clearanceThreshold,
         };
         break;
     }
-    
+
     // Add notes if provided
     if (formValues.notes) {
       payload.notes = formValues.notes;
     }
-    
+
     // Submit the payload
-    
-    
+
     try {
       setSubmitting(true);
-      const response = await apiService.inventory.assignPricingStrategy(payload);
-      
+      const response = await apiService.inventory.assignPricingStrategy(
+        payload
+      );
+
       showAlert('Pricing strategy updated successfully!', 'success');
-      
+
       // Optional: Navigate after success with slight delay
-      
+
       // setTimeout(() => {
       //   navigate("/inventory");
       // }, 2000);
     } catch (error) {
-      console.error("Error setting pricing strategy:", error);
+      console.error('Error setting pricing strategy:', error);
       setError(error.message);
       showAlert(`Error: ${error.message || 'Something went wrong'}`, 'error');
     } finally {
       setSubmitting(false);
     }
   };
-  
+
   // Show alert
   const showAlert = (message, severity) => {
     setAlertMessage(message);
     setAlertSeverity(severity);
     setAlertOpen(true);
-    
+
     // Auto-close successful alerts after 5 seconds
     if (severity === 'success') {
       setTimeout(() => {
@@ -287,7 +294,14 @@ export default function EditListing() {
   if (loading) {
     return (
       <Container>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            height: '50vh',
+          }}
+        >
           <CircularProgress />
         </Box>
       </Container>
@@ -300,11 +314,11 @@ export default function EditListing() {
         <Box sx={{ p: 4 }}>
           <Alert severity="error">
             {error}
-            <Button 
-              variant="outlined" 
-              size="small" 
+            <Button
+              variant="outlined"
+              size="small"
               sx={{ ml: 2 }}
-              onClick={() => navigate("/inventory")}
+              onClick={() => navigate('/inventory')}
             >
               Back to Inventory
             </Button>
@@ -317,7 +331,7 @@ export default function EditListing() {
   return (
     <>
       <Container>
-        <Box sx={{ px: 4, py: 5, width: "100%", maxWidth: 700 }}>
+        <Box sx={{ px: 4, py: 5, width: '100%', maxWidth: 700 }}>
           {/* Alert */}
           <Collapse in={alertOpen}>
             <Alert
@@ -337,51 +351,46 @@ export default function EditListing() {
               {alertMessage}
             </Alert>
           </Collapse>
-          
+
           {/* Title */}
           <Typography
             variant="h5"
             fontWeight="bold"
             mb={3}
-            sx={{ textAlign: "left", color: "#333" }}
+            sx={{ textAlign: 'left', color: '#333' }}
           >
             Assign Pricing Strategy
           </Typography>
 
           {/* Product Info */}
-          <Box mb={3} sx={{ textAlign: "center" }}>
+          <Box mb={3} sx={{ textAlign: 'center' }}>
             <Typography
               variant="body1"
               color="primary"
               fontWeight={600}
-              sx={{ textAlign: "left", fontSize: "15px" }}
+              sx={{ textAlign: 'left', fontSize: '15px' }}
             >
-              {product[0]?.productTitle || 'Product'}<br />
-              <Typography
-                variant="caption"
-                color="text.secondary"
-              >
-                {product[0]?.productId || ItemId} |{" "}
-                <span style={{ color: "#2E865F" }}>Active</span>
+              {product[0]?.productTitle || 'Product'}
+              <br />
+              <Typography variant="caption" color="text.secondary">
+                {product[0]?.productId || ItemId} |{' '}
+                <span style={{ color: '#2E865F' }}>Active</span>
               </Typography>
             </Typography>
           </Box>
 
           {/* Current Price Display */}
-          <Box mb={3} sx={{ textAlign: "left" }}>
-            <Typography
-              variant="body2"
-              color="text.secondary"
-            >
+          <Box mb={3} sx={{ textAlign: 'left' }}>
+            <Typography variant="body2" color="text.secondary">
               Current Price: <strong>${oldPrice}</strong>
             </Typography>
           </Box>
 
           {/* Form */}
-          <Box 
-            component="form" 
-            display="flex" 
-            flexDirection="column" 
+          <Box
+            component="form"
+            display="flex"
+            flexDirection="column"
             gap={3}
             onSubmit={handleSubmit}
           >
@@ -394,8 +403,8 @@ export default function EditListing() {
               onChange={handleStrategyChange}
               required
               sx={{
-                "& .MuiInputLabel-root": { fontSize: "16px" },
-                "& .MuiInputBase-root": { fontSize: "16px" },
+                '& .MuiInputLabel-root': { fontSize: '16px' },
+                '& .MuiInputBase-root': { fontSize: '16px' },
               }}
             >
               <MenuItem value="">Select a strategy</MenuItem>
@@ -413,7 +422,7 @@ export default function EditListing() {
                     {strategy} Strategy Settings
                   </Typography>
                 </Divider>
-                
+
                 {/* Fixed Strategy Fields */}
                 {strategy === 'Fixed' && (
                   <>
@@ -424,13 +433,13 @@ export default function EditListing() {
                       onChange={handleFormChange}
                       required
                       type="number"
-                      inputProps={{ step: "0.01", min: "0" }}
+                      inputProps={{ step: '0.01', min: '0' }}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                     />
-                    
+
                     <FormControlLabel
                       control={
                         <Switch
@@ -441,7 +450,7 @@ export default function EditListing() {
                       }
                       label="Enable Best Offer"
                     />
-                    
+
                     {formValues.enableBestOffer && (
                       <>
                         <TextField
@@ -450,38 +459,40 @@ export default function EditListing() {
                           value={formValues.bestOfferAutoAccept}
                           onChange={handleFormChange}
                           type="number"
-                          inputProps={{ 
-                            step: "0.01", 
-                            min: "0",
-                            max: formValues.targetPrice // Can't accept more than target price
+                          inputProps={{
+                            step: '0.01',
+                            min: '0',
+                            max: formValues.targetPrice, // Can't accept more than target price
                           }}
                           sx={{
-                            "& .MuiInputLabel-root": { fontSize: "16px" },
-                            "& .MuiInputBase-root": { fontSize: "16px" },
+                            '& .MuiInputLabel-root': { fontSize: '16px' },
+                            '& .MuiInputBase-root': { fontSize: '16px' },
                           }}
                         />
-                        
+
                         <TextField
                           label="Best Offer Auto Decline Price"
                           name="bestOfferAutoDecline"
                           value={formValues.bestOfferAutoDecline}
                           onChange={handleFormChange}
                           type="number"
-                          inputProps={{ 
-                            step: "0.01", 
-                            min: "0",
-                            max: formValues.bestOfferAutoAccept || formValues.targetPrice // Can't decline higher than auto-accept
+                          inputProps={{
+                            step: '0.01',
+                            min: '0',
+                            max:
+                              formValues.bestOfferAutoAccept ||
+                              formValues.targetPrice, // Can't decline higher than auto-accept
                           }}
                           sx={{
-                            "& .MuiInputLabel-root": { fontSize: "16px" },
-                            "& .MuiInputBase-root": { fontSize: "16px" },
+                            '& .MuiInputLabel-root': { fontSize: '16px' },
+                            '& .MuiInputBase-root': { fontSize: '16px' },
                           }}
                         />
                       </>
                     )}
                   </>
                 )}
-                
+
                 {/* Competitive Strategy Fields */}
                 {strategy === 'Competitive' && (
                   <>
@@ -492,8 +503,8 @@ export default function EditListing() {
                       value={formValues.competitorRule}
                       onChange={handleFormChange}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                     >
                       <MenuItem value="">None</MenuItem>
@@ -501,18 +512,18 @@ export default function EditListing() {
                       <MenuItem value="beat">Beat Lowest Price</MenuItem>
                       <MenuItem value="custom">Custom Adjustment</MenuItem>
                     </TextField>
-                    
+
                     <TextField
                       label="My Landed Price"
                       name="landedPrice"
                       value={oldPrice}
                       disabled
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                     />
-                    
+
                     <TextField
                       label="Min Price"
                       name="minPrice"
@@ -520,13 +531,13 @@ export default function EditListing() {
                       onChange={handleFormChange}
                       required
                       type="number"
-                      inputProps={{ step: "0.01", min: "0" }}
+                      inputProps={{ step: '0.01', min: '0' }}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                     />
-                    
+
                     <TextField
                       label="Max Price"
                       name="maxPrice"
@@ -534,31 +545,34 @@ export default function EditListing() {
                       onChange={handleFormChange}
                       required
                       type="number"
-                      inputProps={{ step: "0.01", min: formValues.minPrice || "0" }}
+                      inputProps={{
+                        step: '0.01',
+                        min: formValues.minPrice || '0',
+                      }}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                     />
-                    
+
                     <TextField
                       label="Target Price (Initial)"
                       name="targetPrice"
                       value={formValues.targetPrice}
                       onChange={handleFormChange}
                       type="number"
-                      inputProps={{ 
-                        step: "0.01", 
-                        min: formValues.minPrice || "0",
-                        max: formValues.maxPrice || "999999"
+                      inputProps={{
+                        step: '0.01',
+                        min: formValues.minPrice || '0',
+                        max: formValues.maxPrice || '999999',
                       }}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                       helperText="Starting price within min/max range"
                     />
-                    
+
                     <TextField
                       select
                       label="Repricing Frequency"
@@ -566,31 +580,31 @@ export default function EditListing() {
                       value={formValues.repriceFrequency}
                       onChange={handleFormChange}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                     >
                       <MenuItem value="hourly">Hourly</MenuItem>
                       <MenuItem value="daily">Daily</MenuItem>
                       <MenuItem value="weekly">Weekly</MenuItem>
                     </TextField>
-                    
+
                     <TextField
                       label="Competitor Adjustment (%)"
                       name="competitorAdjustment"
                       value={formValues.competitorAdjustment}
                       onChange={handleFormChange}
                       type="number"
-                      inputProps={{ step: "1", min: "-20", max: "20" }}
+                      inputProps={{ step: '1', min: '-20', max: '20' }}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                       helperText="Negative values price below competitors, positive values price above"
                     />
                   </>
                 )}
-                
+
                 {/* Dynamic Strategy Fields */}
                 {strategy === 'Dynamic' && (
                   <>
@@ -600,11 +614,11 @@ export default function EditListing() {
                       value={oldPrice}
                       disabled
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                     />
-                    
+
                     <TextField
                       label="Min Price"
                       name="minPrice"
@@ -612,13 +626,13 @@ export default function EditListing() {
                       onChange={handleFormChange}
                       required
                       type="number"
-                      inputProps={{ step: "0.01", min: "0" }}
+                      inputProps={{ step: '0.01', min: '0' }}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                     />
-                    
+
                     <TextField
                       label="Max Price"
                       name="maxPrice"
@@ -626,23 +640,26 @@ export default function EditListing() {
                       onChange={handleFormChange}
                       required
                       type="number"
-                      inputProps={{ step: "0.01", min: formValues.minPrice || "0" }}
+                      inputProps={{
+                        step: '0.01',
+                        min: formValues.minPrice || '0',
+                      }}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                     />
-                    
+
                     <TextField
                       label="Competitor Adjustment (%)"
                       name="competitorAdjustment"
                       value={formValues.competitorAdjustment}
                       onChange={handleFormChange}
                       type="number"
-                      inputProps={{ step: "1", min: "-20", max: "20" }}
+                      inputProps={{ step: '1', min: '-20', max: '20' }}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                       helperText="Negative values price below competitors, positive values price above"
                     />
@@ -653,10 +670,10 @@ export default function EditListing() {
                       value={formValues.demandMultiplier}
                       onChange={handleFormChange}
                       type="number"
-                      inputProps={{ step: "0.05", min: "0.5", max: "2" }}
+                      inputProps={{ step: '0.05', min: '0.5', max: '2' }}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                       helperText="Increase price when high demand (e.g., 1.2 = 20% increase)"
                     />
@@ -667,16 +684,16 @@ export default function EditListing() {
                       value={formValues.inventoryThreshold}
                       onChange={handleFormChange}
                       type="number"
-                      inputProps={{ step: "1", min: "0", max: "100" }}
+                      inputProps={{ step: '1', min: '0', max: '100' }}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                       helperText="Raise price when inventory falls below this quantity"
                     />
                   </>
                 )}
-                
+
                 {/* Time Based Strategy Fields */}
                 {strategy === 'Time Based' && (
                   <>
@@ -687,57 +704,57 @@ export default function EditListing() {
                       onChange={handleFormChange}
                       required
                       type="number"
-                      inputProps={{ step: "0.01", min: "0" }}
+                      inputProps={{ step: '0.01', min: '0' }}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                     />
-                    
+
                     <TextField
                       label="Weekend Price Boost Multiplier"
                       name="weekendBoost"
                       value={formValues.weekendBoost}
                       onChange={handleFormChange}
                       type="number"
-                      inputProps={{ step: "0.05", min: "0.5", max: "2" }}
+                      inputProps={{ step: '0.05', min: '0.5', max: '2' }}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                       helperText="1.1 means 10% higher price on weekends"
                     />
-                    
+
                     <TextField
                       label="Holiday Price Boost Multiplier"
                       name="holidayBoost"
                       value={formValues.holidayBoost}
                       onChange={handleFormChange}
                       type="number"
-                      inputProps={{ step: "0.05", min: "0.5", max: "2" }}
+                      inputProps={{ step: '0.05', min: '0.5', max: '2' }}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                       helperText="1.25 means 25% higher price on holidays"
                     />
-                    
+
                     <TextField
                       label="Clearance Threshold (days)"
                       name="clearanceThreshold"
                       value={formValues.clearanceThreshold}
                       onChange={handleFormChange}
                       type="number"
-                      inputProps={{ step: "1", min: "0", max: "365" }}
+                      inputProps={{ step: '1', min: '0', max: '365' }}
                       sx={{
-                        "& .MuiInputLabel-root": { fontSize: "16px" },
-                        "& .MuiInputBase-root": { fontSize: "16px" },
+                        '& .MuiInputLabel-root': { fontSize: '16px' },
+                        '& .MuiInputBase-root': { fontSize: '16px' },
                       }}
                       helperText="Days before applying clearance pricing (0 = never)"
                     />
                   </>
                 )}
-                
+
                 {/* Notes field for all strategies */}
                 <TextField
                   label="Notes"
@@ -748,8 +765,8 @@ export default function EditListing() {
                   rows={3}
                   placeholder="e.g. Entire inventory expiring in January."
                   sx={{
-                    "& .MuiInputLabel-root": { fontSize: "16px" },
-                    "& .MuiInputBase-root": { fontSize: "16px" },
+                    '& .MuiInputLabel-root': { fontSize: '16px' },
+                    '& .MuiInputBase-root': { fontSize: '16px' },
                   }}
                 />
               </>
@@ -760,37 +777,37 @@ export default function EditListing() {
               <Button
                 variant="outlined"
                 color="secondary"
-                onClick={() => navigate("/inventory")}
+                onClick={() => navigate('/inventory')}
                 sx={{
-                  padding: "10px 20px",
-                  fontSize: "16px",
-                  borderRadius: "25px",
+                  padding: '10px 20px',
+                  fontSize: '16px',
+                  borderRadius: '25px',
                 }}
               >
                 Cancel
               </Button>
-              
+
               <Button
                 variant="contained"
                 color="primary"
                 type="submit"
                 disabled={submitting}
                 sx={{
-                  padding: "12px 20px",
+                  padding: '12px 20px',
                   fontWeight: 600,
-                  fontSize: "16px",
-                  borderRadius: "25px",
-                  "&:hover": {
-                    backgroundColor: "#1976d2",
-                    boxShadow: "0px 4px 12px rgba(0, 0, 0, 0.1)",
+                  fontSize: '16px',
+                  borderRadius: '25px',
+                  '&:hover': {
+                    backgroundColor: '#1976d2',
+                    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
                   },
-                  transition: "all 0.3s ease-in-out",
+                  transition: 'all 0.3s ease-in-out',
                 }}
               >
                 {submitting ? (
                   <CircularProgress size={24} color="inherit" />
                 ) : (
-                  "Update Strategy"
+                  'Update Strategy'
                 )}
               </Button>
             </Box>

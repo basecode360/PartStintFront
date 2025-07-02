@@ -22,6 +22,7 @@ import {
 } from '@mui/icons-material';
 import { useParams } from 'react-router-dom';
 import apiService from '../api/apiService';
+import useProductStore from '../store/productStore';
 
 export default function PriceChangeSubmissions() {
   const { productId } = useParams();
@@ -29,6 +30,10 @@ export default function PriceChangeSubmissions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Wherever you use AllProducts.filter or AllProducts.map, guard it:
+  const AllProducts = useProductStore((state) =>
+    Array.isArray(state.AllProducts) ? state.AllProducts : []
+  );
   // Fetch price history from MongoDB
   const fetchPriceHistory = async () => {
     try {
@@ -159,6 +164,32 @@ export default function PriceChangeSubmissions() {
       fetchPriceHistory();
     }
   }, [productId]);
+
+  // Example usage inside your component or a hook:
+  const startBackgroundMonitoring = async () => {
+    try {
+      const response = await fetch(
+        `${
+          import.meta.env.VITE_BACKEND_URL
+        }/api/competitor-rules/trigger-monitoring`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            // Add authorization header if needed:
+            // 'Authorization': `Bearer ${yourToken}`,
+          },
+          body: JSON.stringify({
+            userId: yourUserId, // replace with actual userId variable
+          }),
+        }
+      );
+      const data = await response.json();
+      // handle response data as needed
+    } catch (error) {
+      console.error('Error triggering competitor monitoring:', error);
+    }
+  };
 
   if (loading) {
     return (

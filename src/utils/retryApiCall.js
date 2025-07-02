@@ -1,77 +1,92 @@
-// Network retry utility for handling intermittent connection issues
-export const retryApiCall = async (apiCall, options = {}) => {
-  const {
-    maxRetries = 3,
-    retryDelay = 1000,
-    backoffMultiplier = 2,
-    onRetry = null,
-  } = options;
-
+/**
+ * Retry API calls with exponential backoff
+ * @param {Function} apiCall - The API call function to retry
+ * @param {number} maxRetries - Maximum number of retries (default: 3)
+ * @param {number} baseDelay - Base delay in milliseconds (default: 1000)
+ * @returns {Promise} - The result of the API call
+ */
+export const retryApiCall = async (
+  apiCall,
+  maxRetries = 3,
+  baseDelay = 1000
+) => {
   let lastError;
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      if (attempt > 0) {
-        console.log(`🔄 Retry attempt ${attempt}/${maxRetries}`);
-
-        // Wait before retry with exponential backoff
-        const delay = retryDelay * Math.pow(backoffMultiplier, attempt - 1);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-
-        if (onRetry) {
-          onRetry(attempt, lastError);
-        }
-      }
-
       const result = await apiCall();
-
-      if (attempt > 0) {
-        console.log(`✅ API call succeeded on attempt ${attempt + 1}`);
-      }
-
       return result;
     } catch (error) {
       lastError = error;
 
-      console.warn(`❌ API call failed on attempt ${attempt + 1}:`, {
-        message: error.message,
-        code: error.code,
-        status: error.response?.status,
-      });
-
-      // Don't retry for certain types of errors
-      const shouldNotRetry =
-        error.response?.status === 401 || // Unauthorized
-        error.response?.status === 403 || // Forbidden
-        error.response?.status === 404 || // Not Found
-        error.response?.status === 422 || // Validation Error
-        error.message?.includes('abort'); // User aborted
-
-      if (shouldNotRetry) {
-        console.log('🚫 Not retrying due to error type');
+      // Don't retry on certain error types
+      if (
+        error.status === 401 ||
+        error.status === 403 ||
+        error.status === 404
+      ) {
         throw error;
       }
 
       // If this was the last attempt, throw the error
       if (attempt === maxRetries) {
-        console.error(`🚨 All ${maxRetries + 1} attempts failed`);
         throw error;
       }
+
+      // Calculate delay with exponential backoff
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      console.log(
+        `API call failed (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`,
+        error.message
+      );
+
+      // Wait before retrying
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 
   throw lastError;
 };
 
-// Wrapper for login API call with retry logic
-export const retryLogin = async (credentials) => {
-  return retryApiCall(() => apiService.auth.login(credentials), {
-    maxRetries: 2,
-    retryDelay: 2000,
-    onRetry: (attempt, error) => {
-      console.log(`🔄 Login retry ${attempt}: ${error.message}`);
-    },
-  });
+/**
+ * Retry API call with custom retry conditions
+ * @param {Function} apiCall - The API call function to retry
+ * @param {Function} shouldRetry - Function to determine if we should retry (receives error as argument)
+ * @param {number} maxRetries - Maximum number of retries
+ * @param {number} baseDelay - Base delay in milliseconds
+ * @returns {Promise} - The result of the API call
+ */
+export const retryApiCallWithCondition = async (
+  apiCall,
+  shouldRetry = (error) => error.status >= 500,
+  maxRetries = 3,
+  baseDelay = 1000
+) => {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await apiCall();
+      return result;
+    } catch (error) {
+      lastError = error;
+
+      // Check if we should retry this error
+      if (!shouldRetry(error) || attempt === maxRetries) {
+        throw error;
+      }
+
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      console.log(
+        `API call failed (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`,
+        error.message
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+
+  throw lastError;
 };
 
 export default retryApiCall;

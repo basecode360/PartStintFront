@@ -34,9 +34,7 @@ const CompetitorCount = ({ itemId }) => {
             [];
           manualCount = Array.isArray(competitors) ? competitors.length : 0;
 
-          console.log(
-            `📊 Found ${manualCount} manual competitors for ${itemId}`
-          );
+        
         } else {
           console.warn(
             `⚠️ Failed to get manual competitors for ${itemId}:`,

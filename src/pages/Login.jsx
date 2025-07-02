@@ -15,7 +15,7 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 
 import apiService from '../api/apiService';
 import getValidAuthToken from '../utils/getValidAuthToken';
-import { userStore } from '../store/authStore';
+import useAuthStore from '../store/authStore';
 
 export default function Login({ handleLogin }) {
   const [email, setEmail] = useState('');
@@ -25,8 +25,8 @@ export default function Login({ handleLogin }) {
   const [showDebugInfo, setShowDebugInfo] = useState(false);
   const navigate = useNavigate();
 
-  const saveUser = userStore((store) => store.saveUser);
-  const user = userStore((store) => store.user);
+  const saveUser = useAuthStore((store) => store.saveUser);
+  const user = useAuthStore((store) => store.user);
 
   useEffect(() => {
     // If already logged in, redirect to /home

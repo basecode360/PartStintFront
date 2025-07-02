@@ -15,7 +15,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import apiService from '../api/apiService';
-import { useProductStore } from '../store/productStore';
+import useProductStore from '../store/productStore';
 
 export default function CompetitorPricesPage() {
   const { itemId } = useParams();

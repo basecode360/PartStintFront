@@ -21,14 +21,8 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useProductStore } from '../store/productStore';
+import useProductStore from '../store/productStore';
 import apiService from '../api/apiService';
-import {
-  TrendingUp,
-  TrendingDown,
-  TrendingFlat,
-  Refresh as RefreshIcon,
-} from '@mui/icons-material';
 
 export default function EditStrategy() {
   const { productId } = useParams(); // Get dynamic ID from route
@@ -53,6 +47,8 @@ export default function EditStrategy() {
     maxPrice: '',
     notes: '',
   });
+
+  const { modifyProductsArray } = useProductStore();
 
   // Available strategies and rules (fetched from APIs)
   const [availableStrategies, setAvailableStrategies] = useState([]);
@@ -305,28 +301,39 @@ export default function EditStrategy() {
         return;
       }
 
-      // FIXED: Apply strategy to this specific product with listing-specific min/max prices
-      const applyResponse =
-        await apiService.pricingStrategies.applyStrategyToProduct(productId, {
+      // Call the new “assign strategy” endpoint:
+      const updateResponse =
+        await apiService.pricingStrategies.updateStrategyOnProduct(productId, {
           strategyId: selectedStrategyObj._id,
-          sku: product?.sku || null,
-          title: product?.productTitle || null,
           minPrice: parseFloat(formData.minPrice),
           maxPrice: parseFloat(formData.maxPrice),
         });
 
-      if (!applyResponse.success) {
-        showAlert(
-          'Failed to apply strategy to product: ' + applyResponse.message,
-          'error'
-        );
+      if (updateResponse.success) {
+        const newMin = parseFloat(formData.minPrice).toFixed(2);
+        const newMax = parseFloat(formData.maxPrice).toFixed(2);
+        if (typeof modifyProductsArray === 'function') {
+          modifyProductsArray((products) =>
+            products.map((p) =>
+              p.productId === productId
+                ? {
+                    ...p,
+                    strategy: selectedStrategyObj.strategyName,
+                    minPrice: `$${newMin}`,
+                    maxPrice: `$${newMax}`,
+                    hasStrategy: true,
+                  }
+                : p
+            )
+          );
+        }
+        showAlert('Strategy applied successfully!', 'success');
+        navigate('/home', { replace: true });
         return;
       }
 
-      // Check if price was updated
-      const priceUpdated =
-        applyResponse.results &&
-        applyResponse.results.some((r) => r.priceUpdated);
+      // If you want to know whether it triggered an eBay repricing:
+      const priceUpdated = updateResponse.data?.priceUpdated;
 
       if (priceUpdated) {
         showAlert(

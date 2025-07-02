@@ -40,6 +40,7 @@ export default function EditStrategyPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const { modifyProductsArray } = useProductStore();
 
   // Form state for editing strategy
   const [formData, setFormData] = useState({
@@ -228,16 +229,32 @@ export default function EditStrategyPage() {
         cleanFormData
       );
 
-      if (updateResponse.success) {
-        setStrategy(updateResponse.data);
-        setIsEditing(false);
-        showAlert('Strategy updated successfully!', 'success');
-      } else {
-        showAlert(
-          'Failed to update strategy: ' + updateResponse.error,
-          'error'
-        );
-      }
+       if (updateResponse.success) {
+         // 1) update local strategy details
+         setStrategy(updateResponse.data);
+         setIsEditing(false);
+         showAlert('Strategy updated successfully!', 'success');
+
+         // 2) patch only that product in the table store
+         modifyProductsArray((products) =>
+           products.map((p) =>
+             p.productId === someListingId // <-- you’ll need to carry forward the listingId context
+               ? {
+                   ...p,
+                   strategy: updateResponse.data.strategyName,
+                   minPrice: updateResponse.data.minPrice,
+                   maxPrice: updateResponse.data.maxPrice,
+                   hasStrategy: updateResponse.data.isActive,
+                 }
+               : p
+           )
+         );
+       } else {
+         showAlert(
+           'Failed to update strategy: ' + updateResponse.error,
+           'error'
+         );
+       }
     } catch (err) {
       showAlert('Error updating strategy: ' + err.message, 'error');
     } finally {

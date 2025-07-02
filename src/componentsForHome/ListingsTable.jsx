@@ -32,12 +32,13 @@ import {
   TrendingFlat,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useProductStore } from '../store/productStore';
+import useProductStore from '../store/productStore';
+import { useAuth } from '../store/authStore';
 
 // Import your API service
 import apiService from '../api/apiService';
 import CompetitorCount from './CompetitorCount';
-
+const { pricingStrategies } = apiService;
 export default function ListingsTable({
   currentPage = 1,
   itemsPerPage = 10,
@@ -46,21 +47,32 @@ export default function ListingsTable({
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [listingsLoading, setListingsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [paginatedRows, setPaginatedRows] = useState([]);
   const [sortBy, setSortBy] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
   const [autoSyncInProgress, setAutoSyncInProgress] = useState(false);
+  const [strategiesLoading, setStrategiesLoading] = useState(false);
   const {
+    loading,
+    getFilteredProducts,
+    sortBy: storeSortBy,
+    sortOrder,
+    modifySearch,
     modifyProductsArray,
-    modifyProductsId,
+    modifyProductsId, // Strategy-related updates
+    modifyProductsObj, // Competitor-related updates
+    modifyProductsIdWithNavigation,
+    modifyProductsObjWithNavigation,
+    updateProductById,
+    batchUpdateProducts,
+    setProductsLoading,
     AllProducts,
     modifySku,
     searchProduct,
-    modifyCompetitors,
-    modifyProductsObj,
   } = useProductStore();
 
   // Fetch data from eBay when component mounts
@@ -75,6 +87,10 @@ export default function ListingsTable({
   }, [AllProducts]);
 
   useEffect(() => {
+    if (!Array.isArray(AllProducts)) {
+      setRows([]);
+      return;
+    }
     const searchP = searchProduct.toLowerCase();
     const filtered = AllProducts.filter(
       (row) =>
@@ -167,7 +183,7 @@ export default function ListingsTable({
 
   const fetchEbayListings = async () => {
     try {
-      setLoading(true);
+      setListingsLoading(true);
       const response = await apiService.inventory.getActiveListings();
 
       if (response.success) {
@@ -264,35 +280,6 @@ export default function ListingsTable({
                     }),
                 ]);
 
-              // NEW: Auto-execute strategy if both competitors and strategy exist
-              if (
-                manualCompetitorsRes.success &&
-                manualCompetitorsRes.competitors?.length > 0 &&
-                strategyDisplayRes.success &&
-                strategyDisplayRes.data?.hasStrategy
-              ) {
-                console.log(
-                  `🚀 Auto-executing strategy for ${itemID} on page load...`
-                );
-
-                try {
-                  // Execute strategy to ensure price is current
-                  const strategyExecution =
-                    await apiService.pricingStrategies.updatePrice(itemID);
-
-                  if (strategyExecution.success) {
-                    console.log(
-                      `✅ Strategy executed for ${itemID} on page load`
-                    );
-                  }
-                } catch (strategyError) {
-                  console.warn(
-                    `⚠️ Strategy execution failed for ${itemID}:`,
-                    strategyError
-                  );
-                }
-              }
-
               // Fix manual competitor count calculation
               const manualCount = manualCompetitorsRes.success
                 ? manualCompetitorsRes.competitors?.length ||
@@ -337,11 +324,10 @@ export default function ListingsTable({
                 // Debug logging for strategy display
                 console.log(`✅ Strategy loaded for ${itemID}:`, {
                   strategy: strategyDisplay.strategy,
-                  strategyName: strategyDisplay.strategyName,
                   hasStrategy: strategyDisplay.hasStrategy,
                   minPrice: strategyDisplay.minPrice,
                   maxPrice: strategyDisplay.maxPrice,
-                  rawStrategy: strategyDisplay.rawStrategy?.strategyName,
+                  rawStrategy: strategyDisplay.rawStrategy?.strategy,
                 });
               } else {
                 console.warn(
@@ -437,7 +423,7 @@ export default function ListingsTable({
       setError(error.message);
       console.error('Error fetching eBay data:', error);
     } finally {
-      setLoading(false);
+      setListingsLoading(false);
     }
   };
 
@@ -523,45 +509,40 @@ export default function ListingsTable({
   // Refresh all strategy data
   const refreshAllStrategies = async () => {
     try {
-      setLoading(true);
+      setStrategiesLoading(true);
+
+      // ← make sure it’s an array
+      const products = Array.isArray(AllProducts) ? AllProducts : [];
 
       const updatedProducts = await Promise.all(
-        AllProducts.map(async (product) => {
+        products.map(async (product) => {
           try {
-            const strategyDisplayRes =
+            const { data } =
               await apiService.pricingStrategies.getStrategyDisplayForProduct(
                 product.productId
               );
-
-            const strategyDisplay = strategyDisplayRes?.data || {
-              strategy: 'Assign Strategy',
-              minPrice: 'Set',
-              maxPrice: 'Set',
-              hasStrategy: false,
-            };
-
             return {
               ...product,
-              strategy: strategyDisplay.strategy,
-              minPrice: strategyDisplay.minPrice,
-              maxPrice: strategyDisplay.maxPrice,
-              hasStrategy: strategyDisplay.hasStrategy,
+              strategy: data.strategy,
+              minPrice: data.minPrice,
+              maxPrice: data.maxPrice,
+              hasStrategy: data.hasStrategy,
             };
-          } catch (error) {
+          } catch (err) {
             console.error(
               `Error refreshing strategy for ${product.productId}:`,
-              error
+              err
             );
-            return product; // Return original product if refresh fails
+            return product;
           }
         })
       );
 
       modifyProductsArray(updatedProducts);
-    } catch (error) {
-      console.error('❌ Error refreshing all strategies:', error);
+    } catch (err) {
+      console.error('Error refreshing all strategies:', err);
     } finally {
-      setLoading(false);
+      setStrategiesLoading(false);
     }
   };
 
@@ -661,7 +642,65 @@ export default function ListingsTable({
     }
   };
 
-  if (loading) {
+  // Add this function to update min/max and refresh listings
+  const updateMinMaxForItem = async (itemId, minPrice, maxPrice) => {
+    try {
+      await apiService.inventory.updateListingPricing(itemId, {
+        minPrice,
+        maxPrice,
+      });
+      // Refresh listings after update
+      await fetchEbayListings();
+    } catch (error) {
+      console.error('Failed to update min/max:', error);
+    }
+  };
+
+  // Strategy-related product update (navigates to strategy form)
+  const handleStrategyUpdate = (productId, updates) => {
+    try {
+      modifyProductsIdWithNavigation(productId, updates, 'strategy');
+      console.log(`✅ Product ${productId} updated for strategy configuration`);
+    } catch (error) {
+      console.error(
+        `❌ Error updating product ${productId} for strategy:`,
+        error
+      );
+    }
+  };
+
+  // Competitor-related product update (navigates to competitor details)
+  const handleCompetitorUpdate = (productsData) => {
+    try {
+      modifyProductsObjWithNavigation(productsData, 'competitor');
+      console.log(
+        '✅ Bulk product update completed for competitor configuration'
+      );
+    } catch (error) {
+      console.error('❌ Error in competitor product update:', error);
+    }
+  };
+
+  // Regular product updates without navigation
+  const handleProductUpdate = (productId, updates) => {
+    try {
+      modifyProductsId(productId, updates);
+      console.log(`✅ Product ${productId} updated successfully`);
+    } catch (error) {
+      console.error(`❌ Error updating product ${productId}:`, error);
+    }
+  };
+
+  const handleBulkProductUpdate = (productsData) => {
+    try {
+      modifyProductsObj(productsData);
+      console.log('✅ Bulk product update completed');
+    } catch (error) {
+      console.error('❌ Error in bulk product update:', error);
+    }
+  };
+
+  if (listingsLoading) {
     return (
       <Container
         sx={{ mt: 4, mb: 2, display: 'flex', justifyContent: 'center', py: 5 }}

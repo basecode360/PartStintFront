@@ -14,7 +14,7 @@ import {
   Checkbox,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { useProductStore } from '../store/productStore';
+import useProductStore from '../store/productStore';
 import { useNavigate } from 'react-router-dom';
 import apiService from '../api/apiService';
 
